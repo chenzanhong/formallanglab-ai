@@ -12,8 +12,8 @@ import (
 
 	"ai/internal/handler"
 	"ai/internal/service"
-	"ai/logs"
 
+	"github.com/chenzanhong/zlog"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -40,9 +40,9 @@ func NewServer(aiService service.AIService, redisClient *redis.Client, port int)
 func (s *Server) Start() error {
 	// 启动 HTTP 服务器（非阻塞）
 	go func() {
-		logs.Sugar.Infof("Server starting on %s", s.httpServer.Addr)
+		zlog.Infof("Server starting on %s", s.httpServer.Addr)
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logs.Sugar.Errorw("HTTP server failed", "error", err)
+			zlog.Errorw("HTTP server failed", "error", err)
 		}
 	}()
 
@@ -52,23 +52,23 @@ func (s *Server) Start() error {
 	<-quit
 
 	// 收到信号后开始优雅关闭
-	logs.Sugar.Info("Shutting down server...")
+	zlog.Info("Shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	// 1. 关闭 HTTP 服务器
 	if err := s.httpServer.Shutdown(ctx); err != nil {
-		logs.Sugar.Errorw("HTTP server forced to shutdown", "error", err)
+		zlog.Errorw("HTTP server forced to shutdown", "error", err)
 	} else {
-		logs.Sugar.Info("HTTP server stopped gracefully")
+		zlog.Info("HTTP server stopped gracefully")
 	}
 
 	// 2. 关闭 Redis 连接
 	if err := s.redis.Close(); err != nil {
-		logs.Sugar.Warnw("Failed to close Redis connection", "error", err)
+		zlog.Warnw("Failed to close Redis connection", "error", err)
 	} else {
-		logs.Sugar.Info("Redis connection closed")
+		zlog.Info("Redis connection closed")
 	}
 
 	return nil

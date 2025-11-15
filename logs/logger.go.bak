@@ -1,6 +1,7 @@
 package logs
 
 import (
+	cf "ai/configs"
 	"context"
 	"fmt"
 	"io"
@@ -12,7 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	cf "ai/configs"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"

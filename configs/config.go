@@ -2,12 +2,13 @@ package configs
 
 import (
 	// "ai/internal/middleware"
-	"log"
+
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 
+	"github.com/chenzanhong/zlog"
 	"gopkg.in/yaml.v3"
 )
 
@@ -60,47 +61,19 @@ type QACacheConfig struct {
 }
 
 type Config struct {
-	Server  ServerConfig  `yaml:"server"`
-	Redis   RedisConfig   `yaml:"redis"`
-	Rate    RateConfig    `yaml:"rate"`
-	JWT     JWTConfig     `yaml:"jwt"`
-	AI      AIConfig      `yaml:"ai"`
-	Log     LogConfig     `yaml:"log"`
-	QACache QACacheConfig `yaml:"qa_cache"`
-}
-
-// getConfigPath 获取数据库配置文件的路径
-func getConfigPath() string {
-	_, filename, _, ok := runtime.Caller(2) // 获取调用者的文件名
-	if !ok {
-		log.Fatal("无法获取运行时调用者信息")
-	}
-
-	// 获取当前文件所在的目录
-	currentDir := filepath.Dir(filename)
-
-	// 构建到项目根目录的相对路径
-	dbConfigPath := filepath.Join(currentDir, "..", "configs", "config.yaml")
-
-	// 将路径转换为绝对路径并简化路径
-	absPath, err := filepath.Abs(dbConfigPath)
-	if err != nil {
-		log.Printf("无法获取绝对路径: %v", err)
-	}
-
-	simplifiedPath := filepath.Clean(absPath)
-
-	return simplifiedPath
-}
-
-// GetConfigPath 返回数据库配置文件的路径
-func GetConfigPath() string {
-	return getConfigPath()
+	Server  ServerConfig      `yaml:"server"`
+	Redis   RedisConfig       `yaml:"redis"`
+	Rate    RateConfig        `yaml:"rate"`
+	JWT     JWTConfig         `yaml:"jwt"`
+	AI      AIConfig          `yaml:"ai"`
+	Log     zlog.LoggerConfig `yaml:"zlog"`
+	QACache QACacheConfig     `yaml:"qa_cache"`
 }
 
 // LoadConfig 加载配置文件并返回 DBConfig
 func LoadConfig() (*Config, error) {
-	configPath := GetConfigPath()
+	_, path, _, _ := runtime.Caller(0)
+	configPath := filepath.Join(filepath.Dir(path), "config.yaml")
 	yamlFile, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
@@ -150,7 +123,7 @@ func SetEnvVariables(config *Config) {
 	// setEnvIfNotSet("CHROMA_COLLECTION", config.AI.ChromaCollection)
 
 	// Log
-	setEnvIfNotSet("LOG_LEVEL", config.Log.Level)
+	setEnvIfNotSet("LOG_LEVEL", config.Log.Level.String())
 	setEnvIfNotSet("LOG_OUTPUT", config.Log.Output)
 	setEnvIfNotSet("LOG_FORMAT", config.Log.Format)
 	setEnvIfNotSet("LOG_FILE_PATH", config.Log.FilePath)

@@ -1,13 +1,13 @@
 package repository
 
 import (
-	"ai/logs"
 	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/chenzanhong/zlog"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -49,6 +49,6 @@ func InitRedis() (*redis.Client, error) {
 		return nil, fmt.Errorf("failed to connect to Redis: %v", err)
 	}
 
-	logs.Sugar.Info("Redis connected successfully")
+	zlog.Info("Redis connected successfully")
 	return client, nil
 }

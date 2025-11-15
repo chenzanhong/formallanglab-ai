@@ -9,9 +9,10 @@ import (
 	"ai/internal/repository"
 	"ai/internal/server"
 	"ai/internal/service"
-	"ai/logs"
 	"log"
 	"os"
+
+	"github.com/chenzanhong/zlog"
 )
 
 func init() {
@@ -33,12 +34,12 @@ func main() {
 	middleware.SetJWTKey(config.JWT.Key)
 
 	// 4. 初始化日志
-	logs.InitLoggerFromEnv()
+	zlog.InitLogger(config.Log)
 
 	// 5. 初始化Redis
 	redisClient, err := repository.InitRedis()
 	if err != nil {
-		logs.Sugar.Fatalf("Failed to initialize Redis: %v", err)
+		zlog.Fatalf("Failed to initialize Redis: %v", err)
 	}
 
 	// 6. 初始化AI仓库
@@ -49,21 +50,21 @@ func main() {
 	qaCacheLoader := repository.NewQACacheLoader()
 	go func() {
 		if err := qaCacheLoader.LoadCache(qaCache, os.Getenv("QA_CACHE_DIR")); err != nil {
-			logs.Sugar.Errorw("Failed to load QA cache, running without cache", "error", err)
+			zlog.Errorw("Failed to load QA cache, running without cache", "error", err)
 			// 不 fatal，允许服务启动（只是缓存未命中）
 		} else {
-			logs.Sugar.Infow("QA cache loaded successfully")
+			zlog.Infow("QA cache loaded successfully")
 		}
 	}()
 
 	// 8. 初始化OpenAI客户端
 	apiKey := os.Getenv("DASHSCOPE_API_KEY")
 	if apiKey == "" {
-		logs.Sugar.Fatalf("DASHSCOPE_API_KEY is required")
+		zlog.Fatalf("DASHSCOPE_API_KEY is required")
 	}
 	baseURL := os.Getenv("DASHSCOPE_BASE_URL")
 	if baseURL == "" {
-		logs.Sugar.Fatalf("DASHSCOPE_BASE_URL is required")
+		zlog.Fatalf("DASHSCOPE_BASE_URL is required")
 	}
 	openaiClient, err := service.NewOpenAIClient(apiKey, baseURL)
 	if err != nil {
