@@ -1,0 +1,414 @@
+package logs
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+	cf "ai/configs"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
+)
+
+var (
+	// Logger 全局日志实例，需要明确指定字段类型（如 zap.String、zap.Int 等）
+	Logger *zap.Logger
+	// Sugar 全局SugaredLogger实例，支持格式化字符串和任意参数
+	Sugar *zap.SugaredLogger
+	// mu 用于线程安全的初始化
+	mu sync.Mutex
+	// initialized 标记是否已初始化
+	initialized bool
+)
+
+// LoggerConfig 日志配置结构体
+type LoggerConfig struct {
+	Level      string
+	Output     string // "console", "file", "both"
+	Format     string // "json", "console" (只对终端输出生效)
+	FilePath   string
+	MaxSize    int
+	MaxBackups int
+	MaxAge     int
+	Compress   bool
+	Sampling   bool
+}
+
+// InitLogger 初始化企业级日志系统
+func InitLogger(config *LoggerConfig) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if initialized {
+		return nil
+	}
+
+	// 创建日志目录
+	if config.FilePath != "" {
+		dir := filepath.Dir(config.FilePath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("创建日志目录失败: %v", err)
+		}
+	}
+
+	// 设置日志级别
+	level := zapcore.InfoLevel
+	if config.Level != "" {
+		var err error
+		level, err = zapcore.ParseLevel(config.Level)
+		if err != nil {
+			log.Printf("无效的日志级别 %s，使用默认级别 info", config.Level)
+		}
+	}
+
+	// 配置编码器
+	encoderConfig := zapcore.EncoderConfig{
+		TimeKey:        "ts",
+		LevelKey:       "level",
+		NameKey:        "logger",
+		CallerKey:      "caller",
+		FunctionKey:    zapcore.OmitKey,
+		MessageKey:     "msg",
+		StacktraceKey:  "stacktrace",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.LowercaseLevelEncoder,
+		EncodeTime:     zapcore.ISO8601TimeEncoder,
+		EncodeDuration: zapcore.SecondsDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
+	}
+
+	// 创建输出核心
+	var cores []zapcore.Core
+
+	// 根据output参数控制输出目的地，format参数控制终端输出格式
+	// 文件输出始终使用JSON格式
+	switch config.Output {
+	case "console":
+		// 仅控制台输出，根据format决定格式
+		var consoleEncoder zapcore.Encoder
+		consoleEncoderConfig := encoderConfig
+
+		if config.Format == "json" {
+			// 使用JSON格式输出到控制台
+			consoleEncoder = zapcore.NewJSONEncoder(consoleEncoderConfig)
+		} else {
+			// 默认使用带颜色的控制台格式
+			consoleEncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+			consoleEncoder = zapcore.NewConsoleEncoder(consoleEncoderConfig)
+		}
+
+		consoleCore := zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stdout), level)
+		cores = append(cores, consoleCore)
+
+	case "file":
+		// 仅文件输出，强制使用JSON格式
+		if config.FilePath != "" {
+			writer := &lumberjack.Logger{
+				Filename:   config.FilePath,
+				MaxSize:    config.MaxSize,
+				MaxBackups: config.MaxBackups,
+				MaxAge:     config.MaxAge,
+				Compress:   config.Compress,
+			}
+			fileEncoder := zapcore.NewJSONEncoder(encoderConfig) // 文件始终使用JSON格式
+			fileCore := zapcore.NewCore(fileEncoder, zapcore.AddSync(writer), level)
+			cores = append(cores, fileCore)
+		} else {
+			return fmt.Errorf("日志参数output值为file，但是未指定日志文件路径")
+		}
+
+	case "both":
+		fallthrough
+	default:
+		// 默认使用both模式：同时输出到文件和控制台
+		// 文件输出强制使用JSON格式
+		if config.FilePath != "" {
+			writer := &lumberjack.Logger{
+				Filename:   config.FilePath,
+				MaxSize:    config.MaxSize,
+				MaxBackups: config.MaxBackups,
+				MaxAge:     config.MaxAge,
+				Compress:   config.Compress,
+			}
+			fileEncoder := zapcore.NewJSONEncoder(encoderConfig) // 文件始终使用JSON格式
+			fileCore := zapcore.NewCore(fileEncoder, zapcore.AddSync(writer), level)
+			cores = append(cores, fileCore)
+		} else {
+			return fmt.Errorf("日志参数output值为file，但是未指定日志文件路径")
+		}
+
+		// 控制台输出，根据format决定格式
+		var consoleEncoder zapcore.Encoder
+		consoleEncoderConfig := encoderConfig
+
+		if config.Format == "json" {
+			// 使用JSON格式输出到控制台
+			consoleEncoder = zapcore.NewJSONEncoder(consoleEncoderConfig)
+		} else {
+			// 默认使用带颜色的控制台格式
+			consoleEncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+			consoleEncoder = zapcore.NewConsoleEncoder(consoleEncoderConfig)
+		}
+
+		consoleCore := zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stdout), level)
+		cores = append(cores, consoleCore)
+	}
+
+	// 如果没有配置输出，报错
+	if len(cores) == 0 {
+		return fmt.Errorf("未配置任何日志输出")
+	}
+
+	// 创建核心
+	core := zapcore.NewTee(cores...)
+
+	// 创建日志选项
+	options := []zap.Option{
+		zap.AddCaller(),
+		zap.AddCallerSkip(0), // 设置为0以正确显示实际调用日志的文件
+		zap.AddStacktrace(zapcore.ErrorLevel),
+		zap.ErrorOutput(zapcore.Lock(os.Stderr)),
+	}
+
+	// 添加采样
+	if config.Sampling {
+		options = append(options, zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewSamplerWithOptions(core, time.Second, 100, 100)
+		}))
+	}
+
+	// 创建Logger
+	Logger = zap.New(core, options...)
+	Sugar = Logger.Sugar()
+
+	// 记录初始化日志
+	Logger.Info("日志系统初始化完成",
+		zap.String("level", level.String()),
+		zap.String("output", config.Output),
+		zap.String("format", config.Format),
+		zap.String("file_path", config.FilePath),
+	)
+
+	// // 注册清理函数
+	// go func() {
+	// 	<-time.After(time.Second) // 确保主程序有足够时间启动
+	// 	Logger.Info("应用启动完成")
+	// }()
+
+	initialized = true
+	return nil
+}
+
+// InitLoggerFromConfig 从配置对象初始化日志系统
+func InitLoggerFromConfig(config *cf.LogConfig) {
+	// 构建日志配置
+	loggerConfig := &LoggerConfig{
+		Level:      config.Level,
+		Output:     config.Output,
+		Format:     config.Format,
+		FilePath:   config.FilePath,
+		MaxSize:    config.MaxSize,
+		MaxBackups: config.MaxBackups,
+		MaxAge:     config.MaxAge,
+		Compress:   config.Compress,
+		Sampling:   config.Sampling,
+	}
+
+	if err := InitLogger(loggerConfig); err != nil {
+		log.Fatalf("日志系统初始化失败")
+	}
+}
+
+// InitLoggerFromEnv 从环境变量初始化日志系统
+func InitLoggerFromEnv() {
+	config := &LoggerConfig{
+		Level:      getEnv("LOG_LEVEL", "info"),
+		Output:     getEnv("LOG_OUTPUT", "both"),    // 默认为同时输出到文件和控制台
+		Format:     getEnv("LOG_FORMAT", "console"), // 默认为控制台格式
+		FilePath:   getEnv("LOG_FILE_PATH", "./logs/app.log"),
+		MaxSize:    getEnvAsInt("LOG_MAX_SIZE", 50),
+		MaxBackups: getEnvAsInt("LOG_MAX_BACKUPS", 10),
+		MaxAge:     getEnvAsInt("LOG_MAX_AGE", 30),
+		Compress:   getEnvAsBool("LOG_COMPRESS", true),
+		Sampling:   getEnvAsBool("LOG_SAMPLING", true),
+	}
+
+	if err := InitLogger(config); err != nil {
+		log.Fatalf("日志系统初始化失败")
+	}
+}
+
+// InitLoggerDefault 使用默认配置
+func InitLoggerDefault() {
+	// 使用默认配置初始化
+	config := &LoggerConfig{
+		Level:      "info",
+		Output:     "both",    // 默认为同时输出到文件和控制台
+		Format:     "console", // 默认为控制台格式
+		FilePath:   getDefaultLogPath(),
+		MaxSize:    20,
+		MaxBackups: 5,
+		MaxAge:     60,
+		Compress:   false,
+		Sampling:   false,
+	}
+
+	err := InitLogger(config)
+	if err != nil {
+		log.Fatalf("日志系统初始化失败: %v", err)
+	}
+}
+
+// SetupZapSugar 兼容旧版的设置函数
+func SetupZapSugar(writer io.Writer, level zapcore.Level) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	encoderConfig := zap.NewProductionEncoderConfig()
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoder := zapcore.NewJSONEncoder(encoderConfig)
+
+	core := zapcore.NewCore(
+		encoder,
+		zapcore.AddSync(writer),
+		level,
+	)
+
+	Logger = zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
+	Sugar = Logger.Sugar()
+	initialized = true
+}
+
+// ===========
+
+// GetLoggerWithContext 获取带上下文的Logger
+func GetLoggerWithContext(ctx context.Context) *zap.Logger {
+	if Logger == nil {
+		InitLoggerDefault()
+	}
+
+	// 从上下文中提取字段
+	logger := Logger
+	if reqID, ok := ctx.Value("request_id").(string); ok {
+		logger = logger.With(zap.String("request_id", reqID))
+	}
+	if userID, ok := ctx.Value("user_id").(string); ok {
+		logger = logger.With(zap.String("user_id", userID))
+	}
+	if traceID, ok := ctx.Value("trace_id").(string); ok {
+		logger = logger.With(zap.String("trace_id", traceID))
+	}
+
+	return logger
+}
+
+// GetSugarWithContext 获取带上下文的SugaredLogger
+func GetSugarWithContext(ctx context.Context) *zap.SugaredLogger {
+	return GetLoggerWithContext(ctx).Sugar()
+}
+
+// WithFields 创建带额外字段的Logger
+func WithFields(fields map[string]interface{}) *zap.Logger {
+	if Logger == nil {
+		InitLoggerDefault()
+	}
+
+	zapFields := make([]zap.Field, 0, len(fields))
+	for k, v := range fields {
+		switch val := v.(type) {
+		case string:
+			zapFields = append(zapFields, zap.String(k, val))
+		case int:
+			zapFields = append(zapFields, zap.Int(k, val))
+		case int64:
+			zapFields = append(zapFields, zap.Int64(k, val))
+		case bool:
+			zapFields = append(zapFields, zap.Bool(k, val))
+		case float64:
+			zapFields = append(zapFields, zap.Float64(k, val))
+		default:
+			zapFields = append(zapFields, zap.Any(k, val))
+		}
+	}
+
+	return Logger.With(zapFields...)
+}
+
+// WithSugarFields 创建带额外字段的SugaredLogger
+func WithSugarFields(fields map[string]interface{}) *zap.SugaredLogger {
+	return WithFields(fields).Sugar()
+}
+
+// Sync 同步日志到磁盘
+func Sync() error {
+	if Logger == nil {
+		return nil
+	}
+	return Logger.Sync()
+}
+
+// 辅助函数
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	valueStr := getEnv(key, "")
+	if value, err := strconv.Atoi(valueStr); err == nil {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	valueStr := strings.ToLower(getEnv(key, ""))
+	switch valueStr {
+	case "true", "t", "yes", "y", "1":
+		return true
+	case "false", "f", "no", "n", "0":
+		return false
+	default:
+		return defaultValue
+	}
+}
+
+func getDefaultLogPath() string {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		return "./logs/app.log"
+	}
+	currentDir := filepath.Dir(filename)
+	return filepath.Join(currentDir, "logs.log")
+}
+
+func generateInstanceID() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
+	return fmt.Sprintf("%s-%d", hostname, os.Getpid())
+}
+
+// LogHook 日志钩子接口
+type LogHook interface {
+	// OnLog 在日志写入前被调用
+	OnLog(level zapcore.Level, msg string, fields []zap.Field) error
+}
+
+// RegisterLogHook 注册日志钩子
+func RegisterLogHook(hook LogHook) error {
+	// 实现日志钩子的支持
+	// 这部分可以根据需要扩展
+	return nil
+}
