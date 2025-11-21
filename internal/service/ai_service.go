@@ -2,7 +2,6 @@ package service
 
 import (
 	"ai/configs"
-	"ai/internal/core"
 	"ai/internal/domain/dto"
 	"ai/internal/domain/model"
 	"ai/internal/repository"
@@ -36,7 +35,7 @@ type AIService interface {
 	StreamChat(ctx context.Context, session *model.AISession, req *dto.AIChatRequest) (*ssestream.Stream[openai.ChatCompletionChunk], error)
 	MockStreamChat(ctx context.Context, cacheAnswer string) (*model.MockStream, error)
 	CheckCache(question string) string // 查看是否命中预置高频问题缓存
-	GetSession(ctx context.Context, username string, page core.PageType) (*model.AISession, error)
+	GetSession(ctx context.Context, username string) (*model.AISession, error)
 	SaveSession(ctx context.Context, username string, session *model.AISession) error
 	GetSessionExpireSeconds() int
 	GetMaxSessionTurns() int
@@ -85,6 +84,8 @@ func (s *AIServiceImpl) StreamChat(ctx context.Context, session *model.AISession
 	// 用户当前问题
 	messages = append(messages, openai.UserMessage(req.Question))
 
+	// messages := s.buildMessagesWithTruncation(session, req)
+
 	// 调用流式 API
 	stream := s.client.Chat.Completions.NewStreaming(
 		ctx, openai.ChatCompletionNewParams{
@@ -94,6 +95,75 @@ func (s *AIServiceImpl) StreamChat(ctx context.Context, session *model.AISession
 	)
 
 	return stream, nil
+}
+
+func (s *AIServiceImpl) buildMessagesWithTruncation(
+	session *model.AISession,
+	req *dto.AIChatRequest,
+) []openai.ChatCompletionMessageParamUnion {
+
+	// Step 1: 构造必须保留的消息（L1）
+	systemMsg := openai.SystemMessage(systemPrompt)
+	currentQuestion := openai.UserMessage(req.Question)
+	var ctxMsg openai.ChatCompletionMessageParamUnion
+	ctxPrompt := s.buildContextualPrompt(req)
+	if ctxPrompt != "" {
+		ctxMsg = openai.UserMessage(ctxPrompt)
+	}
+
+	// 计算 L1 总 token
+	l1Messages := []openai.ChatCompletionMessageParamUnion{systemMsg, currentQuestion}
+	if ctxPrompt != "" {
+		l1Messages = append(l1Messages, ctxMsg)
+	}
+	l1Tokens := s.estimateMessagesTokens(l1Messages)
+	if l1Tokens >= s.aiCfg.MaxCtxToken {
+		// 极端情况：连 L1 都超了 → 强制只保留 system + current question
+		return []openai.ChatCompletionMessageParamUnion{systemMsg, currentQuestion}
+	}
+
+	// Step 2: 尝试从 RecentTurns 尾部向前添加（L2），直到快满
+	availableTokens := s.aiCfg.MaxCtxToken - l1Tokens
+	historyMessages := []openai.ChatCompletionMessageParamUnion{}
+
+	// 从最新轮次开始倒序遍历（确保最新对话优先保留）
+	for i := len(session.RecentTurns) - 1; i >= 0; i-- {
+		turn := session.RecentTurns[i]
+
+		candidate := []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage(turn.User), 
+			openai.AssistantMessage(turn.AI),
+		}
+		candidateTokens := s.estimateMessagesTokens(candidate)
+
+		if candidateTokens <= availableTokens {
+			// 插入到 historyMessages 开头（保持时间顺序）
+			historyMessages = append(candidate, historyMessages...)
+			availableTokens -= candidateTokens
+		} else {
+			// 当前轮次放不下，后续更早的也不用看了
+			break
+		}
+	}
+
+	// Step 3: 拼接最终消息列表（system → history → context → current）
+	finalMessages := []openai.ChatCompletionMessageParamUnion{systemMsg}
+	finalMessages = append(finalMessages, historyMessages...)
+	if ctxPrompt != "" {
+		finalMessages = append(finalMessages, ctxMsg)
+	}
+	finalMessages = append(finalMessages, currentQuestion)
+
+	return finalMessages
+}
+
+// 辅助函数：估算一组消息的总 token 数
+func (s *AIServiceImpl) estimateMessagesTokens(messages []openai.ChatCompletionMessageParamUnion) int {
+	total := 0
+
+	// 加上角色标签等开销（每条消息约 +5~10 tokens）
+	total += len(messages) * 8
+	return total
 }
 
 // MockStreamChat 模拟流式响应，用于响应预置高频问题缓存
@@ -111,14 +181,14 @@ func (s *AIServiceImpl) SaveSession(ctx context.Context, username string, sessio
 	return s.repo.SaveSession(ctx, username, session, s.aiCfg.SessionExpireSeconds)
 }
 
-func (s *AIServiceImpl) GetSession(ctx context.Context, username string, page core.PageType) (*model.AISession, error) {
+func (s *AIServiceImpl) GetSession(ctx context.Context, username string) (*model.AISession, error) {
 	// 1. 从redis加载会话
-	session, err := s.repo.GetSession(ctx, username, string(page))
+	session, err := s.repo.GetSession(ctx, username)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load session: %w", err)
 	}
 	if session == nil {
-		session = &model.AISession{Page: page}
+		session = &model.AISession{}
 	}
 	session.LastActive = time.Now().Unix()
 	return session, nil

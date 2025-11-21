@@ -2,10 +2,20 @@ package middleware
 
 import (
 	"net/http"
+	"sync"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
+
+var jwtKey []byte
+var done sync.Once
+
+func SetJWTKey(key string) {
+	done.Do(func() {
+		jwtKey = []byte(key)
+	})
+}
 
 // 1. 定义一个只用于提取 username 的轻量 JWT 中间件
 func AuthWebsocket() gin.HandlerFunc {
@@ -22,7 +32,7 @@ func AuthWebsocket() gin.HandlerFunc {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
-			return GetJWTKey(), nil
+			return jwtKey, nil
 		})
 
 		if err != nil || !token.Valid {

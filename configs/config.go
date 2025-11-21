@@ -40,6 +40,7 @@ type AIConfig struct {
 	DashscopeModel       string `yaml:"dashscope_model"`
 	SessionExpireSeconds int    `yaml:"session_expire_seconds"`
 	MaxSessionTurns      int    `yaml:"max_session_turns"` // 最大对话记录数
+	MaxCtxToken          int    `yaml:"max_ctx_token"`
 	// ChromaURL      string `yaml:"chroma_url"`
 	// ChromaCollection string `yaml:"chroma_collection"`
 }
@@ -84,55 +85,108 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &config, nil
 }
 
-func SetEnvVariables(config *Config) {
-	// 辅助函数：如果 envVar 未设置，则用 fallback 值设置它
-	setEnvIfNotSet := func(envVar, fallback string) {
-		if os.Getenv(envVar) == "" {
-			os.Setenv(envVar, fallback)
+// applyEnvToConfig 使用环境变量覆盖 config 中的字段（仅当环境变量非空时）
+func ApplyEnvToConfig(cfg *Config) {
+	getEnv := func(key, fallback string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
 		}
+		return fallback
 	}
+	getEnvInt := func(key string, fallback int) int {
+		if v := getEnv(key, ""); v != "" {
+			if i, err := strconv.Atoi(v); err == nil {
+				return i
+			}
+		}
+		return fallback
+	}
+	getEnvBool := func(key string, fallback bool) bool {
+		if v := getEnv(key, ""); v != "" {
+			if b, err := strconv.ParseBool(v); err == nil {
+				return b
+			}
+		}
+		return fallback
+	}
+
 	// Server
-	setEnvIfNotSet("SERVER_PORT", strconv.Itoa(config.Server.Port))
+	cfg.Server.Port = getEnvInt("SERVER_PORT", cfg.Server.Port)
 
 	// JWT
-	setEnvIfNotSet("JWT_KEY", config.JWT.Key)
-	// middleware.SetJWTKey(os.Getenv("JWT_KEY"))
+	cfg.JWT.Key = getEnv("JWT_KEY", cfg.JWT.Key)
 
 	// Redis
-	setEnvIfNotSet("REDIS_HOST", config.Redis.Host)
-	setEnvIfNotSet("REDIS_PORT", config.Redis.Port)
-	setEnvIfNotSet("REDIS_PASSWORD", config.Redis.Password)
-	setEnvIfNotSet("REDIS_DB", strconv.Itoa(config.Redis.DB))
-	setEnvIfNotSet("REDIS_MAX_CONN", strconv.Itoa(config.Redis.MaxConn))
-	setEnvIfNotSet("REDIS_MAX_IDLE_CONN", strconv.Itoa(config.Redis.MaxIdleConn))
+	cfg.Redis.Host = getEnv("REDIS_HOST", cfg.Redis.Host)
+	cfg.Redis.Port = getEnv("REDIS_PORT", cfg.Redis.Port)
+	cfg.Redis.Password = getEnv("REDIS_PASSWORD", cfg.Redis.Password)
+	cfg.Redis.DB = getEnvInt("REDIS_DB", cfg.Redis.DB)
+	cfg.Redis.MaxConn = getEnvInt("REDIS_MAX_CONN", cfg.Redis.MaxConn)
+	cfg.Redis.MaxIdleConn = getEnvInt("REDIS_MAX_IDLE_CONN", cfg.Redis.MaxIdleConn)
 
-	// Rate Limiting
-	setEnvIfNotSet("RATE_USER_RATE", strconv.Itoa(config.Rate.UserRate))
-	setEnvIfNotSet("RATE_USER_BURST", strconv.Itoa(config.Rate.UserBurst))
+	// Rate
+	cfg.Rate.UserRate = getEnvInt("RATE_USER_RATE", cfg.Rate.UserRate)
+	cfg.Rate.UserBurst = getEnvInt("RATE_USER_BURST", cfg.Rate.UserBurst)
 
-	// AI Service
-	setEnvIfNotSet("DASHSCOPE_API_KEY", config.AI.DashscopeAPIKey)
-	setEnvIfNotSet("DASHSCOPE_BASE_URL", config.AI.DashscopeBaseURL)
-	setEnvIfNotSet("DASHSCOPE_MODEL", config.AI.DashscopeModel)
-	setEnvIfNotSet("SESSION_EXPIRE_SECONDS", strconv.Itoa(config.AI.SessionExpireSeconds))
-	setEnvIfNotSet("MAX_SESSION_TURNS", strconv.Itoa(config.AI.MaxSessionTurns))
-	// setEnvIfNotSet("CHROMA_URL", config.AI.ChromaURL)
-	// setEnvIfNotSet("CHROMA_COLLECTION", config.AI.ChromaCollection)
+	// AI
+	cfg.AI.DashscopeAPIKey = getEnv("DASHSCOPE_API_KEY", cfg.AI.DashscopeAPIKey)
+	cfg.AI.DashscopeBaseURL = getEnv("DASHSCOPE_BASE_URL", cfg.AI.DashscopeBaseURL)
+	cfg.AI.DashscopeModel = getEnv("DASHSCOPE_MODEL", cfg.AI.DashscopeModel)
+	cfg.AI.SessionExpireSeconds = getEnvInt("SESSION_EXPIRE_SECONDS", cfg.AI.SessionExpireSeconds)
+	cfg.AI.MaxSessionTurns = getEnvInt("MAX_SESSION_TURNS", cfg.AI.MaxSessionTurns)
+	cfg.AI.MaxCtxToken = getEnvInt("MAX_CTX_TOKEN", cfg.AI.MaxCtxToken)
 
 	// Log
-	setEnvIfNotSet("LOG_LEVEL", config.Log.Level.String())
-	setEnvIfNotSet("LOG_OUTPUT", config.Log.Output)
-	setEnvIfNotSet("LOG_FORMAT", config.Log.Format)
-	setEnvIfNotSet("LOG_FILE_PATH", config.Log.FilePath)
-	setEnvIfNotSet("LOG_MAX_SIZE", strconv.Itoa(config.Log.MaxSize))
-	setEnvIfNotSet("LOG_MAX_BACKUPS", strconv.Itoa(config.Log.MaxBackups))
-	setEnvIfNotSet("LOG_MAX_AGE", strconv.Itoa(config.Log.MaxAge))
-	setEnvIfNotSet("LOG_COMPRESS", strconv.FormatBool(config.Log.Compress))
-	setEnvIfNotSet("LOG_SAMPLING", strconv.FormatBool(config.Log.Sampling))
+	// 注意：zlog.Level 需要能从字符串解析
+	if levelStr := getEnv("LOG_LEVEL", cfg.Log.Level.String()); levelStr != "" {
+		cfg.Log.Level = zlog.Level(levelStr) // 假设 ParseLevel 存在且安全
+	}
+	cfg.Log.Output = getEnv("LOG_OUTPUT", cfg.Log.Output)
+	cfg.Log.Format = getEnv("LOG_FORMAT", cfg.Log.Format)
+	cfg.Log.FilePath = getEnv("LOG_FILE_PATH", cfg.Log.FilePath)
+	cfg.Log.MaxSize = getEnvInt("LOG_MAX_SIZE", cfg.Log.MaxSize)
+	cfg.Log.MaxBackups = getEnvInt("LOG_MAX_BACKUPS", cfg.Log.MaxBackups)
+	cfg.Log.MaxAge = getEnvInt("LOG_MAX_AGE", cfg.Log.MaxAge)
+	cfg.Log.Compress = getEnvBool("LOG_COMPRESS", cfg.Log.Compress)
+	cfg.Log.Sampling = getEnvBool("LOG_SAMPLING", cfg.Log.Sampling)
 
 	// QACache
-	setEnvIfNotSet("QA_CACHE_DIR", config.QACache.Path)
+	cfg.QACache.Path = getEnv("QA_CACHE_DIR", cfg.QACache.Path)
+}
+
+func SyncConfigToEnv(cfg *Config) {
+	setEnv := func(key, value string) { os.Setenv(key, value) }
+	setEnvInt := func(key string, value int) { setEnv(key, strconv.Itoa(value)) }
+	setEnvBool := func(key string, value bool) { setEnv(key, strconv.FormatBool(value)) }
+
+	setEnvInt("SERVER_PORT", cfg.Server.Port)
+	setEnv("JWT_KEY", cfg.JWT.Key)
+	setEnv("REDIS_HOST", cfg.Redis.Host)
+	setEnv("REDIS_PORT", cfg.Redis.Port)
+	setEnv("REDIS_PASSWORD", cfg.Redis.Password)
+	setEnvInt("REDIS_DB", cfg.Redis.DB)
+	setEnvInt("REDIS_MAX_CONN", cfg.Redis.MaxConn)
+	setEnvInt("REDIS_MAX_IDLE_CONN", cfg.Redis.MaxIdleConn)
+	setEnvInt("RATE_USER_RATE", cfg.Rate.UserRate)
+	setEnvInt("RATE_USER_BURST", cfg.Rate.UserBurst)
+	setEnv("DASHSCOPE_API_KEY", cfg.AI.DashscopeAPIKey)
+	setEnv("DASHSCOPE_BASE_URL", cfg.AI.DashscopeBaseURL)
+	setEnv("DASHSCOPE_MODEL", cfg.AI.DashscopeModel)
+	setEnvInt("SESSION_EXPIRE_SECONDS", cfg.AI.SessionExpireSeconds)
+	setEnvInt("MAX_SESSION_TURNS", cfg.AI.MaxSessionTurns)
+	setEnvInt("MAX_CTX_TOKEN", cfg.AI.MaxCtxToken)
+	setEnv("LOG_LEVEL", cfg.Log.Level.String())
+	setEnv("LOG_OUTPUT", cfg.Log.Output)
+	setEnv("LOG_FORMAT", cfg.Log.Format)
+	setEnv("LOG_FILE_PATH", cfg.Log.FilePath)
+	setEnvInt("LOG_MAX_SIZE", cfg.Log.MaxSize)
+	setEnvInt("LOG_MAX_BACKUPS", cfg.Log.MaxBackups)
+	setEnvInt("LOG_MAX_AGE", cfg.Log.MaxAge)
+	setEnvBool("LOG_COMPRESS", cfg.Log.Compress)
+	setEnvBool("LOG_SAMPLING", cfg.Log.Sampling)
+	setEnv("QA_CACHE_DIR", cfg.QACache.Path)
 }

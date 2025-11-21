@@ -13,7 +13,7 @@ import (
 
 type AIRepository interface {
 	SaveSession(ctx context.Context, username string, session *model.AISession, sessionExpireSeconds int) error
-	GetSession(ctx context.Context, username, page string) (*model.AISession, error)
+	GetSession(ctx context.Context, username string) (*model.AISession, error)
 }
 
 type AIRepositoryImpl struct {
@@ -25,7 +25,7 @@ func NewAIRepository(redisClient *redis.Client) AIRepository {
 }
 
 func (r *AIRepositoryImpl) SaveSession(ctx context.Context, username string, session *model.AISession, sessionExpireSeconds int) error {
-	key := "ai:" + username + ":" + string(session.Page)
+	key := "ai:" + username
 	// fmt.Println(key)
 	data, err := json.Marshal(session)
 	if err != nil {
@@ -34,8 +34,8 @@ func (r *AIRepositoryImpl) SaveSession(ctx context.Context, username string, ses
 	return r.redis.Set(ctx, key, data, time.Duration(sessionExpireSeconds)*time.Second).Err()
 }
 
-func (r *AIRepositoryImpl) GetSession(ctx context.Context, username, page string) (*model.AISession, error) {
-	key := "ai:" + username + ":" + page
+func (r *AIRepositoryImpl) GetSession(ctx context.Context, username string) (*model.AISession, error) {
+	key := "ai:" + username
 	data, err := r.redis.Get(ctx, key).Bytes()
 	if err != nil {
 		// 判断是否是 Redis 的 "key not found" 错误

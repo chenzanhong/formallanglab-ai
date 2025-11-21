@@ -9,6 +9,7 @@ type AISession struct {
 	LastActive  int64         `json:"last_active"`            // 最后活跃时间
 	RecentTurns []QAPair      `json:"recent_turns,omitempty"` // 最近的对话记录
 	Summary     string        `json:"summary,omitempty"`      // 会话总结
+	Token       int           `json:"token"`                  // 当前会话的token数
 }
 
 type QAPair struct {
@@ -40,6 +41,10 @@ func (s *AISession) Trim(maxTurns int) {
 	if len(s.RecentTurns) > maxTurns {
 		s.RecentTurns = s.RecentTurns[len(s.RecentTurns)-maxTurns:]
 	}
+}
+
+func (s *AISession) TrimWithToken(maxToken int) {
+	// 优先保留最新的记录
 }
 
 func (s *AISession) AddTurns(user, ai string) {

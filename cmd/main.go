@@ -10,6 +10,7 @@ import (
 	"ai/internal/server"
 	"ai/internal/service"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/chenzanhong/zlog"
@@ -26,9 +27,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("加载配置失败：%v", err.Error())
 	}
+	// 环境变量有先
+	cf.ApplyEnvToConfig(config)
 
-	// 2. 设置环境变量
-	cf.SetEnvVariables(config)
+	// 2. 设置环境变量，确保未有的环境变量有值
+	cf.SyncConfigToEnv(config)
 
 	// 3. 设置JWT密钥
 	middleware.SetJWTKey(config.JWT.Key)
@@ -73,7 +76,11 @@ func main() {
 
 	// 9. 创建AI服务
 	aiService := service.NewAIService(openaiClient, aiRepo, qaCache, config.AI)
-
+	// 启动pprof http服务
+	go func() {
+		zlog.Info("Starting pprof on localhost:" + os.Getenv("PPROF_PORT"))
+		http.ListenAndServe("localhost:"+os.Getenv("PPROF_PORT"), nil)
+	}()
 	server := server.NewServer(aiService, redisClient, config.Server.Port)
 	server.Start()
 }

@@ -79,7 +79,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 			// 异步保存会话
 			go func() {
 				ctx := context.Background()
-				session, err := h.aiService.GetSession(c.Request.Context(), username, req.Page)
+				session, err := h.aiService.GetSession(c.Request.Context(), username)
 				if err != nil {
 					metrics.IncOperation("ai", "chat_sse", "failure: get session error")
 					zlog.Warnw("获取会话失败", "detail", "无法获取或创建用户会话")
@@ -115,7 +115,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 	metrics.IncOperation("ai", "cache_hit", "failure")
 	zlog.Infow("AI对话(SSE)缓存未命中", "question", req.Question)
 
-	session, err := h.aiService.GetSession(c.Request.Context(), username, req.Page)
+	session, err := h.aiService.GetSession(c.Request.Context(), username)
 	if err != nil {
 		metrics.IncOperation("ai", "chat_sse", "failure: get session error")
 		zlog.Warnw("获取会话失败", "detail", "无法获取或创建用户会话")
@@ -320,17 +320,31 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 			}
 			mu.Unlock()
 
-			qaCacheStream := h.aiService.CheckCache(req.Question)
+			qaCacheAnswer := h.aiService.CheckCache(req.Question)
 			// 判断是否命中预置缓存
-			if qaCacheStream != "" {
+			if qaCacheAnswer != "" {
 				fmt.Println("\nWebSocket 命中缓存，问题是：", req.Question)
 				metrics.IncOperation("ai", "cache_hit", "success")
-				mockStream, err := h.aiService.MockStreamChat(ctx, qaCacheStream)
+				mockStream, err := h.aiService.MockStreamChat(ctx, qaCacheAnswer)
 				if err == nil {
+					// 异步保存会话
+					go func() {
+						session, err := h.aiService.GetSession(ctx, username)
+						if err != nil {
+							metrics.IncOperation("ai", "chat_ws", "failure: get session error")
+							zlog.Errorw("Get session failed", "error", err)
+							return
+						}
+						session.AddTurns(req.Question, qaCacheAnswer)
+						session.Trim(h.aiService.GetMaxSessionTurns())
+						if saveErr := h.aiService.SaveSession(context.Background(), username, session); saveErr != nil {
+							metrics.IncOperation("ai", "chat_ws", "failure: save session error")
+							zlog.Errorw("Save session failed", "error", saveErr)
+						}
+					}()
 					// 启动异步模拟流处理
 					go func() {
 						defer close(doneChan) // 通知主 goroutine: 我已完成
-						var aiResp strings.Builder
 						for mockStream.Next() {
 							// 检查是否被取消
 							select {
@@ -342,8 +356,6 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 								// 继续发送chuck
 							}
 							content := mockStream.Current()
-							fmt.Println(content)
-							aiResp.WriteString(content)
 
 							conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 							// fmt.Println(5)
@@ -363,26 +375,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 							safeWrite(model.WsMessage{Type: model.MsgTypeDone})
 						}
 						// fmt.Println("AI对话（MockStreamChat）请求成功")
-						fmt.Println("MockAI 回答：", aiResp.String())
-						// 异步保存会话
-						go func() {
-							// session.RecentTurns = append(session.RecentTurns, model.QAPair{
-							// 	User: req.Question,
-							// 	AI:   aiResp.String(),
-							// })
-							session, err := h.aiService.GetSession(ctx, username, req.Page)
-							if err != nil {
-								metrics.IncOperation("ai", "chat_ws", "failure: get session error")
-								zlog.Errorw("Get session failed", "error", err)
-								return
-							}
-							session.AddTurns(req.Question, aiResp.String())
-							session.Trim(h.aiService.GetMaxSessionTurns())
-							if saveErr := h.aiService.SaveSession(context.Background(), username, session); saveErr != nil {
-								metrics.IncOperation("ai", "chat_ws", "failure: save session error")
-								zlog.Errorw("Save session failed", "error", saveErr)
-							}
-						}()
+						fmt.Println("MockAI 回答：", qaCacheAnswer)
 					}()
 					continue
 				}
@@ -394,7 +387,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 			go func() {
 				defer close(doneChan) // 通知主 goroutine: 我已完成
 				// fmt.Printf("%s\n%+v", req.Question, req.Automaton)
-				session, err := h.aiService.GetSession(ctx, username, req.Page)
+				session, err := h.aiService.GetSession(ctx, username)
 				if err != nil {
 					metrics.IncOperation("ai", "chat_ws", "failure: get session error")
 					zlog.Errorw("Get session failed", "error", err)
@@ -421,6 +414,10 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 						// 继续发送chuck
 					}
 					content := stream.Current().Choices[0].Delta.Content
+					// 下面三个参数有些ai不会携带
+					fmt.Println("CompletionTokens: ", stream.Current().Usage.CompletionTokens)
+					fmt.Println("PromptTokens: ", stream.Current().Usage.PromptTokens)
+					fmt.Println("TotalTokens: ", stream.Current().Usage.TotalTokens)
 					// fmt.Println(content)
 					aiResp.WriteString(content)
 
