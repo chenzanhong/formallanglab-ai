@@ -3,12 +3,16 @@ package configs
 import (
 	// "ai/internal/middleware"
 
+	"encoding/json"
+	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 
 	"github.com/chenzanhong/zlog"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -75,15 +79,22 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	_, path, _, _ := runtime.Caller(0)
 	configPath := filepath.Join(filepath.Dir(path), "config.yaml")
-	yamlFile, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, err
+	var config Config
+	if yamlFile, err := os.ReadFile(configPath); err == nil {
+		if err := yaml.Unmarshal(yamlFile, &config); err != nil {
+			return nil, fmt.Errorf("failed to parse config.yaml: %w", err)
+		}
+	} else {
+		// config.yaml 不存在，使用零值（后续会被环境变量覆盖）
+		zap.L().Info("config.yaml not found, using defaults from environment variables")
 	}
 
-	var config Config
-	err = yaml.Unmarshal(yamlFile, &config)
-	if err != nil {
-		return nil, err
+	// 用环境变量覆盖所有字段（必须）
+	ApplyEnvToConfig(&config)
+
+	// 可选：验证必要字段是否已设置
+	if config.AI.DashscopeAPIKey == "" {
+		return nil, fmt.Errorf("required env DASHSCOPE_API_KEY is not set")
 	}
 
 	return &config, nil
@@ -153,9 +164,23 @@ func ApplyEnvToConfig(cfg *Config) {
 	cfg.Log.MaxAge = getEnvInt("LOG_MAX_AGE", cfg.Log.MaxAge)
 	cfg.Log.Compress = getEnvBool("LOG_COMPRESS", cfg.Log.Compress)
 	cfg.Log.Sampling = getEnvBool("LOG_SAMPLING", cfg.Log.Sampling)
+	cfg.Log.Fields = parseLogFields()
 
 	// QACache
 	cfg.QACache.Path = getEnv("QA_CACHE_DIR", cfg.QACache.Path)
+}
+
+func parseLogFields() map[string]string {
+	raw := os.Getenv("LOG_FIELDS")
+	if raw == "" {
+		return map[string]string{"server": "email"} // 默认值
+	}
+	var fields map[string]string
+	if err := json.Unmarshal([]byte(raw), &fields); err != nil {
+		log.Printf("Invalid LOG_FIELDS, using default: %v", err)
+		return map[string]string{"server": "email"}
+	}
+	return fields
 }
 
 func SyncConfigToEnv(cfg *Config) {

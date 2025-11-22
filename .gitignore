@@ -1,3 +1,4 @@
 asset/qacache/*
 *.yaml
 *.log
+.env

@@ -28,8 +28,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("加载配置失败：%v", err.Error())
 	}
-	// 环境变量有先
-	cf.ApplyEnvToConfig(config)
 
 	// 2. 设置环境变量，确保未有的环境变量有值
 	cf.SyncConfigToEnv(config)
