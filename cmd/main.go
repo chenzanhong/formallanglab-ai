@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/chenzanhong/goutil/jwtx"
 	"github.com/chenzanhong/zlog"
 )
 
@@ -39,6 +40,8 @@ func main() {
 	// 4. 初始化日志
 	zlog.InitLogger(config.Log)
 
+	jwtx.InitWithHS256(config.JWT.Key, &middleware.Claims{}, jwtx.WithAutoInject(true))
+
 	// 5. 初始化Redis
 	redisClient, err := repository.InitRedis()
 	if err != nil {
@@ -52,7 +55,7 @@ func main() {
 	qaCache := model.NewQACache()
 	qaCacheLoader := repository.NewQACacheLoader()
 	go func() {
-		if err := qaCacheLoader.LoadCache(qaCache, os.Getenv("QA_CACHE_DIR")); err != nil {
+		if err = qaCacheLoader.LoadCache(qaCache, os.Getenv("QA_CACHE_DIR")); err != nil {
 			zlog.Errorw("Failed to load QA cache, running without cache", "error", err)
 			// 不 fatal，允许服务启动（只是缓存未命中）
 		} else {

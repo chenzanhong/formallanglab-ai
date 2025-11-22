@@ -5,6 +5,7 @@ import (
 
 	mtr "ai/internal/middleware/metrics"
 
+	"github.com/chenzanhong/goutil/jwtx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,7 +30,7 @@ func SetupRouter(aiHandler *AIHandler) *gin.Engine {
 	})
 
 	router.GET("/gdesign/ai/metrics", mtr.MetricsHandler())
-	router.POST("/gdesign/ai/sse", middleware.JWTAuthMiddleware(), middleware.UserRateLimitMiddleware(), aiHandler.AIChatSSE) // 流式AI聊天接口，SSE
+	router.POST("/gdesign/ai/sse", jwtx.GinJWTAuthMiddleware(), middleware.UserRateLimitMiddleware(), aiHandler.AIChatSSE) // 流式AI聊天接口，SSE
 
 	return router
 }
