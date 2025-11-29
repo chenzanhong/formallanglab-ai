@@ -62,9 +62,6 @@ COPY configs/config.yaml /app/configs/
 # 复制qacache资源
 COPY asset/ /app/asset/
 
-# 创建环境变量示例文件 - 使用COPY替代RUN echo以提高可读性
-COPY --chown=aiuser:aiuser .env.example /app/
-
 # 暴露服务端口（使用环境变量允许动态配置）
 EXPOSE 8082 6062 4042
 
@@ -100,3 +97,7 @@ CMD ["/app/ai-server"]
 #
 # 注意：敏感信息（如API密钥）应通过环境变量或安全的卷挂载方式提供，
 # 避免直接硬编码在镜像中。生产环境建议使用Docker Secrets或环境变量。
+
+
+# docker build -t crpi-tcnuencv1iecgx03.cn-hangzhou.personal.cr.aliyuncs.com/chenzh2004/formallanglab-ai .
+# docker push crpi-tcnuencv1iecgx03.cn-hangzhou.personal.cr.aliyuncs.com/chenzh2004/formallanglab-ai

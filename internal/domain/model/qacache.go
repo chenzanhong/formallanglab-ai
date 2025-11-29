@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type QACache struct {
@@ -48,4 +49,17 @@ func (c *QACache) Set(key, value string) {
 
 func (c *QACache) Delete(key string) {
 	delete(c.data, key)
+}
+
+// QACacheItem 数据库模型，用于PostgreSQL存储
+// 注意：这是新增的结构体，不影响现有的QACache实现
+type QACacheItem struct {
+	ID        int       `json:"id" db:"id"`
+	Content   string    `json:"content" db:"content"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+func (QACacheItem) TableName() string {
+	return "qacache"
 }

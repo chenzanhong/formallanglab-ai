@@ -28,6 +28,11 @@ func SetupRouter(aiHandler *AIHandler) *gin.Engine {
 			"status": "ok",
 		})
 	})
+	router.HEAD("/gdesign/ai/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "ok",
+		})
+	})
 
 	router.GET("/gdesign/ai/metrics", mtr.MetricsHandler())
 	router.POST("/gdesign/ai/sse", jwtx.GinJWTAuthMiddleware(), middleware.UserRateLimitMiddleware(), aiHandler.AIChatSSE) // 流式AI聊天接口，SSE

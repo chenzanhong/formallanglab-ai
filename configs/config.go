@@ -62,12 +62,24 @@ type LogConfig struct {
 }
 
 type QACacheConfig struct {
-	Path string `yaml:"path"`
+	Path     string `yaml:"path"`
+	UseDB    bool   `yaml:"use_db"`    // 是否使用数据库存储
+	LoadFromFile bool `yaml:"load_from_file"` // 是否从文件加载
+}
+
+type DBConfig struct {
+	Host     string `yaml:"host"`
+	Port     string `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	DBName   string `yaml:"dbname"`
+	SSLMode  string `yaml:"sslmode"`
 }
 
 type Config struct {
 	Server  ServerConfig      `yaml:"server"`
 	Redis   RedisConfig       `yaml:"redis"`
+	DB      DBConfig          `yaml:"db"`
 	Rate    RateConfig        `yaml:"rate"`
 	JWT     JWTConfig         `yaml:"jwt"`
 	AI      AIConfig          `yaml:"ai"`
@@ -164,21 +176,40 @@ func ApplyEnvToConfig(cfg *Config) {
 	cfg.Log.MaxAge = getEnvInt("LOG_MAX_AGE", cfg.Log.MaxAge)
 	cfg.Log.Compress = getEnvBool("LOG_COMPRESS", cfg.Log.Compress)
 	cfg.Log.Sampling = getEnvBool("LOG_SAMPLING", cfg.Log.Sampling)
-	cfg.Log.Fields = parseLogFields()
+	override := parseLogFieldsFromEnv()
+	if override != nil {
+		// 合并：保留 cfg.Log.Fields 已有字段，用 override 覆盖/新增
+		if cfg.Log.Fields == nil {
+			cfg.Log.Fields = make(map[string]string)
+		}
+		for k, v := range override {
+			cfg.Log.Fields[k] = v
+		}
+	}
 
 	// QACache
 	cfg.QACache.Path = getEnv("QA_CACHE_DIR", cfg.QACache.Path)
+	cfg.QACache.UseDB = getEnvBool("QA_CACHE_USE_DB", cfg.QACache.UseDB)
+	cfg.QACache.LoadFromFile = getEnvBool("QA_CACHE_LOAD_FROM_FILE", cfg.QACache.LoadFromFile)
+	
+	// DB
+	cfg.DB.Host = getEnv("DB_HOST", cfg.DB.Host)
+	cfg.DB.Port = getEnv("DB_PORT", cfg.DB.Port)
+	cfg.DB.User = getEnv("DB_USER", cfg.DB.User)
+	cfg.DB.Password = getEnv("DB_PASSWORD", cfg.DB.Password)
+	cfg.DB.DBName = getEnv("DB_NAME", cfg.DB.DBName)
+	cfg.DB.SSLMode = getEnv("DB_SSLMODE", cfg.DB.SSLMode)
 }
 
-func parseLogFields() map[string]string {
+func parseLogFieldsFromEnv() map[string]string {
 	raw := os.Getenv("LOG_FIELDS")
 	if raw == "" {
-		return map[string]string{"server": "email"} // 默认值
+		return nil // 或空 map
 	}
 	var fields map[string]string
 	if err := json.Unmarshal([]byte(raw), &fields); err != nil {
-		log.Printf("Invalid LOG_FIELDS, using default: %v", err)
-		return map[string]string{"server": "email"}
+		log.Printf("Invalid LOG_FIELDS, ignoring: %v", err)
+		return nil
 	}
 	return fields
 }
@@ -214,4 +245,13 @@ func SyncConfigToEnv(cfg *Config) {
 	setEnvBool("LOG_COMPRESS", cfg.Log.Compress)
 	setEnvBool("LOG_SAMPLING", cfg.Log.Sampling)
 	setEnv("QA_CACHE_DIR", cfg.QACache.Path)
+	setEnvBool("QA_CACHE_USE_DB", cfg.QACache.UseDB)
+	setEnvBool("QA_CACHE_LOAD_FROM_FILE", cfg.QACache.LoadFromFile)
+	
+	setEnv("DB_HOST", cfg.DB.Host)
+	setEnv("DB_PORT", cfg.DB.Port)
+	setEnv("DB_USER", cfg.DB.User)
+	setEnv("DB_PASSWORD", cfg.DB.Password)
+	setEnv("DB_NAME", cfg.DB.DBName)
+	setEnv("DB_SSLMODE", cfg.DB.SSLMode)
 }

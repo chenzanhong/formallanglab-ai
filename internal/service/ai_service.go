@@ -34,16 +34,17 @@ const (
 type AIService interface {
 	StreamChat(ctx context.Context, session *model.AISession, req *dto.AIChatRequest) (*ssestream.Stream[openai.ChatCompletionChunk], error)
 	MockStreamChat(ctx context.Context, cacheAnswer string) (*model.MockStream, error)
-	CheckCache(question string) string // 查看是否命中预置高频问题缓存
-	GetSession(ctx context.Context, username string) (*model.AISession, error)
+	CheckCache(question string) string                                         // 查看是否命中预置高频问题缓存
+	GetSession(ctx context.Context, username string) (*model.AISession, error) //
 	SaveSession(ctx context.Context, username string, session *model.AISession) error
 	GetSessionExpireSeconds() int
 	GetMaxSessionTurns() int
 }
 
 type AIServiceImpl struct {
-	client  *openai.Client
-	repo    repository.AIRepository
+	client *openai.Client
+	repo   repository.AIRepository
+	// qaRepo  repository.QACacheRepository // 由于预置qa基本都是固定的知识点，很少变动，暂时还是不使用DB存储qa并更新动态qacache了。
 	qaCache *model.QACache // 显式依赖
 	aiCfg   configs.AIConfig
 }
@@ -131,7 +132,7 @@ func (s *AIServiceImpl) buildMessagesWithTruncation(
 		turn := session.RecentTurns[i]
 
 		candidate := []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage(turn.User), 
+			openai.UserMessage(turn.User),
 			openai.AssistantMessage(turn.AI),
 		}
 		candidateTokens := s.estimateMessagesTokens(candidate)
