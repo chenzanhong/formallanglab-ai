@@ -8,7 +8,15 @@ import (
 // CORSMiddleware 是一个中间件，用于配置CORS
 func CORSMiddleware() gin.HandlerFunc {
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"*"} // 允许的源，可以根据需要修改http://localhost:8081
+	config.AllowOrigins = []string{
+		"https://caohaitong.xyz",
+		"http://caohaitong.xyz",
+		"http://113.44.170.52",
+		"https://113.44.170.52",
+		"http://localhost:5173",
+		"http://localhost:3000",
+	}
+
 	// config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	// config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 	config.AllowMethods = []string{"*"}
