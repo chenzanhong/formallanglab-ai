@@ -12,9 +12,6 @@ import (
 // SetupRouter 设置路由
 func SetupRouter(aiHandler *AIHandler) *gin.Engine {
 	router := gin.Default()
-	// WebSocket聊天接口，不经过JWT中间件，直接通过URL参数 token 验证
-	router.GET("/gdesign/ai/ws", middleware.AuthWebsocket(), aiHandler.AIChatWS)
-
 	// 1. 请求ID中间件
 	router.Use(middleware.RequestID())
 	// 2. CORS中间件
@@ -33,8 +30,11 @@ func SetupRouter(aiHandler *AIHandler) *gin.Engine {
 			"status": "ok",
 		})
 	})
-
 	router.GET("/gdesign/ai/metrics", mtr.MetricsHandler())
+
+	// WebSocket聊天接口，不经过JWT中间件，直接通过URL参数 token 验证
+	router.GET("/gdesign/ai/ws", middleware.AuthWebsocket(), aiHandler.AIChatWS)
+
 	router.POST("/gdesign/ai/sse", jwtx.GinJWTAuthMiddleware(), middleware.UserRateLimitMiddleware(), aiHandler.AIChatSSE) // 流式AI聊天接口，SSE
 
 	return router

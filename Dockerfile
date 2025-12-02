@@ -34,9 +34,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o ai-server cmd/main.go
 FROM crpi-tcnuencv1iecgx03.cn-hangzhou.personal.cr.aliyuncs.com/chenzh2004/alpine:3.20
 
 # 添加安全标签
-LABEL maintainer="GDesign Team"
+LABEL maintainer="FormalLangLab Team"
 LABEL version="1.0"
-LABEL description="AI Service for GDesign Project"
+LABEL description="AI Service for FormalLangLab Project"
 
 # 设置工作目录
 WORKDIR /app
@@ -67,37 +67,6 @@ EXPOSE 8082 6062 4042
 
 # 运行应用（使用exec形式的CMD以确保信号能正确传递）
 CMD ["/app/ai-server"]
-
-# ======================= 使用说明 =======================
-# 1. 构建镜像：
-#    docker build -t gdesign-ai .
-#
-# 2. 准备环境：
-#    - 创建.env文件（从.env.example复制并填写实际密钥）
-#    - 确保Redis服务正在运行
-#
-# 3. 运行容器（方式1：使用环境变量传递敏感信息）：
-#    docker run -d \
-#      --name gdesign-ai \
-#      -p 8082:8082 \
-#      -e DASHSCOPE_API_KEY=your_actual_key \
-#      -e REDIS_HOST=host.docker.internal \
-#      -e JWT_KEY=your_actual_jwt_key \
-#      gdesign-ai
-#
-# 4. 运行容器（方式2：使用卷挂载配置文件）：
-#    docker run -d \
-#      --name gdesign-ai \
-#      -p 8082:8082 \
-#      -v $(pwd)/.env:/app/.env \
-#      -v $(pwd)/configs:/app/configs \
-#      -v $(pwd)/logs:/app/logs \
-#      -v $(pwd)/asset/qacache:/app/asset/qacache \
-#      gdesign-ai
-#
-# 注意：敏感信息（如API密钥）应通过环境变量或安全的卷挂载方式提供，
-# 避免直接硬编码在镜像中。生产环境建议使用Docker Secrets或环境变量。
-
 
 # docker build -t crpi-tcnuencv1iecgx03.cn-hangzhou.personal.cr.aliyuncs.com/chenzh2004/formallanglab-ai .
 # docker push crpi-tcnuencv1iecgx03.cn-hangzhou.personal.cr.aliyuncs.com/chenzh2004/formallanglab-ai
