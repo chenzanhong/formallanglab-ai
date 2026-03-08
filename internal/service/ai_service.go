@@ -44,7 +44,6 @@ type AIService interface {
 type AIServiceImpl struct {
 	client *openai.Client
 	repo   repository.AIRepository
-	// qaRepo  repository.QACacheRepository // 由于预置qa基本都是固定的知识点，很少变动，暂时还是不使用DB存储qa并更新动态qacache了。
 	qaCache *model.QACache // 显式依赖
 	aiCfg   configs.AIConfig
 }
@@ -52,7 +51,7 @@ type AIServiceImpl struct {
 func NewAIService(
 	client *openai.Client,
 	repo repository.AIRepository,
-	qaCache *model.QACache, // 新增参数
+	qaCache *model.QACache,
 	aiCfg configs.AIConfig,
 ) AIService {
 	return &AIServiceImpl{
@@ -72,7 +71,6 @@ func (s *AIServiceImpl) StreamChat(ctx context.Context, session *model.AISession
 
 	// 历史对话：直接交替添加
 	for _, turn := range session.RecentTurns {
-		// fmt.Println(turn.AI)
 		messages = append(messages, openai.UserMessage(turn.User))
 		messages = append(messages, openai.AssistantMessage(turn.AI))
 	}
