@@ -37,5 +37,22 @@ func SetupRouter(aiHandler *AIHandler) *gin.Engine {
 
 	router.POST("/gdesign/ai/sse", jwtx.GinJWTAuthMiddleware(), middleware.UserRateLimitMiddleware(), aiHandler.AIChatSSE) // 流式AI聊天接口，SSE
 
+	// 自定义AI模型相关接口
+	authGroup := router.Group("/gdesign/ai", jwtx.GinJWTAuthMiddleware())
+	{
+		// 获取AI配置
+		authGroup.GET("/config", aiHandler.GetAIConfig)
+		// 添加自定义AI模型
+		authGroup.POST("/models", aiHandler.AddCustomAIModel)
+		// 获取自定义AI模型列表
+		authGroup.GET("/models", aiHandler.GetCustomAIModels)
+		// 更新自定义AI模型
+		authGroup.PUT("/models/:id", aiHandler.UpdateCustomAIModel)
+		// 删除自定义AI模型
+		authGroup.DELETE("/models/:id", aiHandler.DeleteCustomAIModel)
+		// 切换模型
+		authGroup.POST("/switch", aiHandler.SwitchModel)
+	}
+
 	return router
 }

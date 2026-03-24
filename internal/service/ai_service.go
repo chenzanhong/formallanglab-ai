@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chenzanhong/zlog"
 	"github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/packages/ssestream"
 )
@@ -32,38 +33,52 @@ const (
 )
 
 type AIService interface {
-	StreamChat(ctx context.Context, session *model.AISession, req *dto.AIChatRequest) (*ssestream.Stream[openai.ChatCompletionChunk], error)
+	StreamChat(ctx context.Context, session *model.AISession, req *dto.AIChatRequest, modelID int64, userID int64) (*ssestream.Stream[openai.ChatCompletionChunk], error)
 	MockStreamChat(ctx context.Context, cacheAnswer string) (*model.MockStream, error)
 	CheckCache(question string) string                                         // 查看是否命中预置高频问题缓存
 	GetSession(ctx context.Context, username string) (*model.AISession, error) //
 	SaveSession(ctx context.Context, username string, session *model.AISession) error
 	GetSessionExpireSeconds() int
 	GetMaxSessionTurns() int
+	CheckAICallLimit(ctx context.Context, userID string) (bool, error)                            // 检查是否超出调用限制
+	IncrementAICallCount(ctx context.Context, userID string) error                                // 增加调用计数
+	GetCustomAIModel(ctx context.Context, modelID int64, userID int64) (map[string]string, error) // 获取自定义AI模型配置
+	// 自定义AI模型相关方法
+	AddCustomAIModel(ctx context.Context, userID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error)
+	GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error)
+	UpdateCustomAIModel(ctx context.Context, userID int64, modelID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error)
+	DeleteCustomAIModel(ctx context.Context, userID int64, modelID int64) error
+	GetUserCurrentModelID(ctx context.Context, userID int64) (*int64, error)
+	UpdateUserCurrentModel(ctx context.Context, userID int64, modelID *int64) error
+	GetAIConfig(ctx context.Context, userID int64) (*dto.AIConfigResponse, error)
 }
 
 type AIServiceImpl struct {
-	client *openai.Client
-	repo   repository.AIRepository
-	qaCache *model.QACache // 显式依赖
-	aiCfg   configs.AIConfig
+	clientManager *OpenAIClientManager
+	repo          repository.AIRepository
+	qaCache       *model.QACache // 显式依赖
+	aiCfg         configs.AIConfig
+	authRepo      repository.UserRepository // 用户仓库，用于获取自定义AI模型配置
 }
 
 func NewAIService(
-	client *openai.Client,
+	clientManager *OpenAIClientManager,
 	repo repository.AIRepository,
+	authRepo repository.UserRepository,
 	qaCache *model.QACache,
 	aiCfg configs.AIConfig,
 ) AIService {
 	return &AIServiceImpl{
-		client:  client,
-		repo:    repo,
-		qaCache: qaCache,
-		aiCfg:   aiCfg,
+		clientManager: clientManager,
+		repo:          repo,
+		authRepo:      authRepo,
+		qaCache:       qaCache,
+		aiCfg:         aiCfg,
 	}
 }
 
 // StreamChat 处理流式对话请求
-func (s *AIServiceImpl) StreamChat(ctx context.Context, session *model.AISession, req *dto.AIChatRequest) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
+func (s *AIServiceImpl) StreamChat(ctx context.Context, session *model.AISession, req *dto.AIChatRequest, modelID int64, userID int64) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
 	// 构造消息：严格遵循 [system] → [history] → [context] → [current question]
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.SystemMessage(systemPrompt),
@@ -83,15 +98,34 @@ func (s *AIServiceImpl) StreamChat(ctx context.Context, session *model.AISession
 	// 用户当前问题
 	messages = append(messages, openai.UserMessage(req.Question))
 
-	// messages := s.buildMessagesWithTruncation(session, req)
-
 	// 调用流式 API
-	stream := s.client.Chat.Completions.NewStreaming(
-		ctx, openai.ChatCompletionNewParams{
-			Messages: messages,
-			Model:    os.Getenv("DASHSCOPE_MODEL"),
-		},
-	)
+	var stream *ssestream.Stream[openai.ChatCompletionChunk]
+
+	if modelID > 0 {
+		// 使用自定义模型
+		modelConfig, err := s.GetCustomAIModel(ctx, modelID, userID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get custom model: %w", err)
+		}
+
+		// 动态创建客户端
+		client := s.clientManager.GetClient(modelConfig["api_key"], modelConfig["base_url"])
+		stream = client.Chat.Completions.NewStreaming(
+			ctx, openai.ChatCompletionNewParams{
+				Messages: messages,
+				Model:    modelConfig["model"],
+			},
+		)
+	} else {
+		// 使用默认模型
+		client := s.clientManager.GetDefaultClient(os.Getenv("DASHSCOPE_API_KEY"), os.Getenv("DASHSCOPE_BASE_URL"))
+		stream = client.Chat.Completions.NewStreaming(
+			ctx, openai.ChatCompletionNewParams{
+				Messages: messages,
+				Model:    os.Getenv("DASHSCOPE_MODEL"),
+			},
+		)
+	}
 
 	return stream, nil
 }
@@ -201,6 +235,183 @@ func (s *AIServiceImpl) GetSessionExpireSeconds() int {
 // GetMaxSessionTurns 返回最大会话轮数
 func (s *AIServiceImpl) GetMaxSessionTurns() int {
 	return s.aiCfg.MaxSessionTurns
+}
+
+// CheckAICallLimit 检查用户是否超出AI调用限制
+func (s *AIServiceImpl) CheckAICallLimit(ctx context.Context, userID string) (bool, error) {
+	// 从repository获取调用次数
+	count, err := s.repo.GetAICallCount(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	// 检查是否超过限制（10次）
+	return count < 10, nil
+}
+
+// IncrementAICallCount 增加用户AI调用计数
+func (s *AIServiceImpl) IncrementAICallCount(ctx context.Context, userID string) error {
+	return s.repo.IncrementAICallCount(ctx, userID)
+}
+
+// GetCustomAIModel 获取自定义AI模型配置
+func (s *AIServiceImpl) GetCustomAIModel(ctx context.Context, modelID int64, userID int64) (map[string]string, error) {
+	modelConfig, err := s.repo.GetCustomAIModelFromRedis(ctx, modelID, userID)
+	if err != nil {
+		zlog.Error("failed to get custom ai model from redis", zlog.String("err", err.Error()))
+	}
+
+	if modelConfig != nil {
+		return modelConfig, nil
+	}
+
+	model, err := s.authRepo.GetCustomAIModelByID(ctx, modelID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	modelConfig = map[string]string{
+		"api_key":  model.APIKey,
+		"base_url": model.APIBaseURL,
+		"model":    model.ModelName,
+		"provider": model.Provider,
+	}
+
+	if err := s.repo.SaveCustomAIModelToRedis(ctx, modelID, userID, modelConfig); err != nil {
+		return nil, err
+	}
+
+	return modelConfig, nil
+}
+
+// AddCustomAIModel 添加自定义AI模型配置
+func (s *AIServiceImpl) AddCustomAIModel(ctx context.Context, userID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error) {
+	aiModel := &model.CustomAIModel{
+		UserID:     userID,
+		Name:       req.Name,
+		Provider:   req.Provider,
+		APIKey:     req.APIKey,
+		APIBaseURL: req.APIBaseURL,
+		ModelName:  req.ModelName,
+		IsActive:   true,
+	}
+
+	if err := s.authRepo.AddCustomAIModel(ctx, aiModel); err != nil {
+		return nil, err
+	}
+
+	modelConfig := map[string]string{
+		"api_key":  aiModel.APIKey,
+		"base_url": aiModel.APIBaseURL,
+		"model":    aiModel.ModelName,
+		"provider": aiModel.Provider,
+	}
+
+	if err := s.repo.SaveCustomAIModelToRedis(ctx, aiModel.ID, userID, modelConfig); err != nil {
+		return nil, err
+	}
+
+	return aiModel, nil
+}
+
+// GetCustomAIModels 获取用户的自定义AI模型配置列表
+func (s *AIServiceImpl) GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error) {
+	return s.authRepo.GetCustomAIModels(ctx, userID)
+}
+
+// UpdateCustomAIModel 更新自定义AI模型配置
+func (s *AIServiceImpl) UpdateCustomAIModel(ctx context.Context, userID int64, modelID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error) {
+	existingModel, err := s.authRepo.GetCustomAIModelByID(ctx, modelID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	existingModel.Name = req.Name
+	existingModel.Provider = req.Provider
+	existingModel.APIKey = req.APIKey
+	existingModel.APIBaseURL = req.APIBaseURL
+	existingModel.ModelName = req.ModelName
+	existingModel.IsActive = true
+
+	if err := s.authRepo.UpdateCustomAIModel(ctx, existingModel); err != nil {
+		return nil, err
+	}
+
+	modelConfig := map[string]string{
+		"api_key":  existingModel.APIKey,
+		"base_url": existingModel.APIBaseURL,
+		"model":    existingModel.ModelName,
+		"provider": existingModel.Provider,
+	}
+
+	if err := s.repo.SaveCustomAIModelToRedis(ctx, modelID, userID, modelConfig); err != nil {
+		return nil, err
+	}
+
+	return existingModel, nil
+}
+
+// DeleteCustomAIModel 删除自定义AI模型配置
+func (s *AIServiceImpl) DeleteCustomAIModel(ctx context.Context, userID int64, modelID int64) error {
+	if err := s.authRepo.DeleteCustomAIModel(ctx, modelID, userID); err != nil {
+		return err
+	}
+
+	return s.repo.DeleteCustomAIModelFromRedis(ctx, modelID, userID)
+}
+
+// GetUserCurrentModelID 获取用户当前使用的模型ID
+func (s *AIServiceImpl) GetUserCurrentModelID(ctx context.Context, userID int64) (*int64, error) {
+	return s.authRepo.GetUserCurrentModelID(ctx, userID)
+}
+
+// UpdateUserCurrentModel 更新用户当前使用的模型ID
+func (s *AIServiceImpl) UpdateUserCurrentModel(ctx context.Context, userID int64, modelID *int64) error {
+	return s.authRepo.UpdateUserCurrentModel(ctx, userID, modelID)
+}
+
+// GetAIConfig 获取用户的AI配置
+func (s *AIServiceImpl) GetAIConfig(ctx context.Context, userID int64) (*dto.AIConfigResponse, error) {
+	// 获取当前模型ID
+	currentModelID, err := s.authRepo.GetUserCurrentModelID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取自定义模型列表
+	customModels, err := s.authRepo.GetCustomAIModels(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 转换为响应格式
+	customModelResponses := make([]dto.CustomAIModelResponse, len(customModels))
+	for i, model := range customModels {
+		customModelResponses[i] = dto.CustomAIModelResponse{
+			ID:         model.ID,
+			Name:       model.Name,
+			Provider:   model.Provider,
+			APIBaseURL: model.APIBaseURL,
+			ModelName:  model.ModelName,
+			IsActive:   model.IsActive,
+			CreatedAt:  model.CreatedAt.Format("2006-01-02 15:04:05"),
+		}
+	}
+
+	// 获取默认模型剩余次数
+	remainingQuota := 10
+	count, err := s.repo.GetAICallCount(ctx, fmt.Sprintf("%d", userID))
+	if err == nil {
+		remainingQuota = 10 - count
+		if remainingQuota < 0 {
+			remainingQuota = 0
+		}
+	}
+
+	return &dto.AIConfigResponse{
+		CurrentModelID: currentModelID,
+		RemainingQuota: remainingQuota,
+		CustomModels:   customModelResponses,
+	}, nil
 }
 
 func (s *AIServiceImpl) buildContextualPrompt(req *dto.AIChatRequest) string {

@@ -58,6 +58,36 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 		return
 	}
 
+	// 获取用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
+		return
+	}
+
+	// 获取模型ID，默认为0（使用默认模型）
+	modelID := int64(0)
+	if modelIDStr := c.Query("model_id"); modelIDStr != "" {
+		fmt.Sscanf(modelIDStr, "%d", &modelID)
+	}
+
+	// 检查AI调用限制（仅默认模型）
+	if modelID == 0 {
+		canCall, err := h.aiService.CheckAICallLimit(c.Request.Context(), username)
+		if err != nil {
+			metrics.IncOperation("ai", "chat_sse", "failure: check call limit error")
+			zlog.Warnw("检查AI调用限制失败", "detail", "无法检查用户调用限制")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "检查调用限制失败", "result": false})
+			return
+		}
+		if !canCall {
+			metrics.IncOperation("ai", "chat_sse", "failure: call limit exceeded")
+			zlog.Warnw("AI调用次数已达今日上限", "username", username)
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "AI调用次数已达今日上限，请明日再试或使用自定义模型", "result": false})
+			return
+		}
+	}
+
 	// 设置SSE响应头
 	c.Header("Content-Type", "text/event-stream; charset=utf-8")
 	c.Header("Cache-Control", "no-cache")
@@ -121,7 +151,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 		zlog.Warnw("获取会话失败", "detail", "无法获取或创建用户会话")
 		// 记录错误，但是不终止，允许不借助对话历史
 	}
-	stream, err := h.aiService.StreamChat(c.Request.Context(), session, &req)
+	stream, err := h.aiService.StreamChat(c.Request.Context(), session, &req, modelID, userID.(int64))
 	if err != nil {
 		metrics.IncOperation("ai", "chat_sse", "failure: service error")
 		zlog.Warnw("AI对话请求失败", "detail", "AI服务调用失败")
@@ -189,6 +219,13 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 			metrics.IncOperation("ai", "chat_sse", "failure: save session error")
 			zlog.Warnw("AI会话保存失败", "detail", "无法保存用户会话信息")
 		}
+		// 增加AI调用计数（仅默认模型）
+		if modelID == 0 {
+			if err := h.aiService.IncrementAICallCount(ctx, username); err != nil {
+				metrics.IncOperation("ai", "chat_sse", "failure: increment call count error")
+				zlog.Warnw("增加AI调用计数失败", "detail", "无法更新用户调用计数")
+			}
+		}
 	}()
 
 	metrics.IncOperation("ai", "chat_sse", "success")
@@ -213,6 +250,13 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 	username := c.GetString("username")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"msg": "unauthorized", "result": false})
+		return
+	}
+
+	// 获取用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
 		return
 	}
 
@@ -306,6 +350,26 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 				continue
 			}
 
+			// 获取模型ID，默认为0（使用默认模型）
+			modelID := incoming.ModelID
+
+			// 检查AI调用限制（仅默认模型）
+			if modelID == 0 {
+				canCall, err := h.aiService.CheckAICallLimit(c.Request.Context(), username)
+				if err != nil {
+					metrics.IncOperation("ai", "chat_ws", "failure: check call limit error")
+					zlog.Warnw("检查AI调用限制失败", "detail", "无法检查用户调用限制")
+					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "检查调用限制失败"})
+					continue
+				}
+				if !canCall {
+					metrics.IncOperation("ai", "chat_ws", "failure: call limit exceeded")
+					zlog.Warnw("AI调用次数已达今日上限", "username", username)
+					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "AI调用次数已达今日上限，请明日再试或使用自定义模型"})
+					continue
+				}
+			}
+
 			// 创建新的上下文和取消函数
 			ctx, cancel := context.WithCancel(context.Background())
 			doneChan := make(chan struct{})
@@ -383,7 +447,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: err.Error()})
 					return
 				}
-				stream, err := h.aiService.StreamChat(ctx, session, &req)
+				stream, err := h.aiService.StreamChat(ctx, session, &req, modelID, userID.(int64))
 				if err != nil {
 					metrics.IncOperation("ai", "chat_ws", "failure: stream chat error")
 					zlog.Errorw("Stream chat failed", "error", err)
@@ -430,6 +494,13 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 						metrics.IncOperation("ai", "chat_ws", "failure: save session error")
 						zlog.Warnw("AI会话保存失败", "detail", "无法保存用户会话信息")
 					}
+					// 增加AI调用计数（仅默认模型）
+					if modelID == 0 {
+						if err := h.aiService.IncrementAICallCount(context.Background(), username); err != nil {
+							metrics.IncOperation("ai", "chat_ws", "failure: increment call count error")
+							zlog.Warnw("增加AI调用计数失败", "detail", "无法更新用户调用计数")
+						}
+					}
 				}()
 			}()
 		case model.MsgTypeStop:
@@ -449,4 +520,186 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 			safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "unknown message type"})
 		}
 	}
+}
+
+// GetAIConfig 获取用户的AI配置
+func (h *AIHandler) GetAIConfig(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
+		return
+	}
+
+	// 获取AI配置
+	config, err := h.aiService.GetAIConfig(c.Request.Context(), userID.(int64))
+	if err != nil {
+		zlog.Warnw("获取AI配置失败", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取AI配置失败", "result": false})
+		return
+	}
+
+	c.JSON(http.StatusOK, config)
+}
+
+// AddCustomAIModel 添加自定义AI模型配置
+func (h *AIHandler) AddCustomAIModel(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
+		return
+	}
+
+	// 绑定请求参数
+	var req dto.CustomAIModelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效", "result": false})
+		return
+	}
+
+	// 添加自定义模型
+	_, err := h.aiService.AddCustomAIModel(c.Request.Context(), userID.(int64), &req)
+	if err != nil {
+		zlog.Warnw("添加自定义AI模型失败", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "添加自定义AI模型失败", "result": false})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.CustomAIModelOperationResponse{
+		Result: true,
+		Msg:    "添加自定义AI模型成功",
+	})
+}
+
+// GetCustomAIModels 获取用户的自定义AI模型配置列表
+func (h *AIHandler) GetCustomAIModels(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
+		return
+	}
+
+	// 获取自定义模型列表
+	models, err := h.aiService.GetCustomAIModels(c.Request.Context(), userID.(int64))
+	if err != nil {
+		zlog.Warnw("获取自定义AI模型列表失败", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取自定义AI模型列表失败", "result": false})
+		return
+	}
+
+	// 转换为响应格式
+	customModelResponses := make([]dto.CustomAIModelResponse, len(models))
+	for i, model := range models {
+		customModelResponses[i] = dto.CustomAIModelResponse{
+			ID:         model.ID,
+			Name:       model.Name,
+			Provider:   model.Provider,
+			APIBaseURL: model.APIBaseURL,
+			ModelName:  model.ModelName,
+			IsActive:   model.IsActive,
+			CreatedAt:  model.CreatedAt.Format("2006-01-02 15:04:05"),
+		}
+	}
+
+	c.JSON(http.StatusOK, dto.CustomAIModelListResponse{
+		Models: customModelResponses,
+	})
+}
+
+// UpdateCustomAIModel 更新自定义AI模型配置
+func (h *AIHandler) UpdateCustomAIModel(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
+		return
+	}
+
+	// 获取模型ID
+	modelIDStr := c.Param("id")
+	var modelID int64
+	if _, err := fmt.Sscanf(modelIDStr, "%d", &modelID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的模型ID", "result": false})
+		return
+	}
+
+	// 绑定请求参数
+	var req dto.CustomAIModelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效", "result": false})
+		return
+	}
+
+	// 更新自定义模型
+	_, err := h.aiService.UpdateCustomAIModel(c.Request.Context(), userID.(int64), modelID, &req)
+	if err != nil {
+		zlog.Warnw("更新自定义AI模型失败", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新自定义AI模型失败", "result": false})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.CustomAIModelOperationResponse{
+		Result: true,
+		Msg:    "更新自定义AI模型成功",
+	})
+}
+
+// DeleteCustomAIModel 删除自定义AI模型配置
+func (h *AIHandler) DeleteCustomAIModel(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
+		return
+	}
+
+	// 获取模型ID
+	modelIDStr := c.Param("id")
+	var modelID int64
+	if _, err := fmt.Sscanf(modelIDStr, "%d", &modelID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的模型ID", "result": false})
+		return
+	}
+
+	// 删除自定义模型
+	if err := h.aiService.DeleteCustomAIModel(c.Request.Context(), userID.(int64), modelID); err != nil {
+		zlog.Warnw("删除自定义AI模型失败", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除自定义AI模型失败", "result": false})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.CustomAIModelOperationResponse{
+		Result: true,
+		Msg:    "删除自定义AI模型成功",
+	})
+}
+
+// SwitchModel 切换模型
+func (h *AIHandler) SwitchModel(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
+		return
+	}
+
+	// 绑定请求参数
+	var req dto.SwitchModelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效", "result": false})
+		return
+	}
+
+	// 切换模型
+	if err := h.aiService.UpdateUserCurrentModel(c.Request.Context(), userID.(int64), req.ModelID); err != nil {
+		zlog.Warnw("切换模型失败", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "切换模型失败", "result": false})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "切换模型成功",
+	})
 }

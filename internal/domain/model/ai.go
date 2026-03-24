@@ -2,6 +2,7 @@ package model
 
 import (
 	"ai/internal/core"
+	"time"
 )
 
 type AISession struct {
@@ -32,9 +33,24 @@ const (
 )
 
 type WsMessage struct {
-	Type  WsMessageType `json:"type"` //  "chat", "stop", "chunk", "done", "error", "stopped"
-	Data  string        `json:"data,omitempty"`
-	Error string        `json:"error,omitempty"`
+	Type    WsMessageType `json:"type"` //  "chat", "stop", "chunk", "done", "error", "stopped"
+	Data    string        `json:"data,omitempty"`
+	Error   string        `json:"error,omitempty"`
+	ModelID int64         `json:"model_id,omitempty"` // 自定义模型ID，0表示使用默认模型
+}
+
+// ========== Custom AI Model ===========
+// CustomAIModel 自定义AI模型配置
+type CustomAIModel struct {
+	ID         int64     `json:"id" gorm:"primarykey"`
+	UserID     int64     `json:"user_id" gorm:"index"`
+	Name       string    `json:"name"`
+	Provider   string    `json:"provider"` // 如：openai_compat, ollama, azure等
+	APIBaseURL string    `json:"api_base_url"`
+	APIKey     string    `json:"api_key"`
+	ModelName  string    `json:"model_name"`
+	IsActive   bool      `json:"is_active" gorm:"default:true"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 func (s *AISession) Trim(maxTurns int) {
