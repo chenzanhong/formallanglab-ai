@@ -3,7 +3,24 @@ package model
 import (
 	"ai/internal/core"
 	"time"
+
+	"gorm.io/gorm"
 )
+
+// CustomAIModel 自定义AI模型配置
+type CustomAIModel struct {
+	ID         int64          `json:"id" gorm:"primarykey"`
+	UserID     int64          `json:"user_id" gorm:"index;column:user_id"`
+	Name       string         `json:"name" gorm:"column:name"`
+	Provider   string         `json:"provider" gorm:"column:provider"` // 如：openai_compat, ollama, azure等
+	APIBaseURL string         `json:"api_base_url" gorm:"column:api_base_url"`
+	APIKey     string         `json:"api_key" gorm:"column:api_key"`
+	ModelName  string         `json:"model_name" gorm:"column:model_name"`
+	IsActive   bool           `json:"is_active" gorm:"column:is_active"`
+	CreatedAt  time.Time      `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt  time.Time      `json:"updated_at" gorm:"column:updated_at"`
+	DeletedAt  gorm.DeletedAt `gorm:"index"`
+}
 
 type AISession struct {
 	Page        core.PageType `json:"page"`
@@ -39,28 +56,10 @@ type WsMessage struct {
 	ModelID int64         `json:"model_id,omitempty"` // 自定义模型ID，0表示使用默认模型
 }
 
-// ========== Custom AI Model ===========
-// CustomAIModel 自定义AI模型配置
-type CustomAIModel struct {
-	ID         int64     `json:"id" gorm:"primarykey"`
-	UserID     int64     `json:"user_id" gorm:"index"`
-	Name       string    `json:"name"`
-	Provider   string    `json:"provider"` // 如：openai_compat, ollama, azure等
-	APIBaseURL string    `json:"api_base_url"`
-	APIKey     string    `json:"api_key"`
-	ModelName  string    `json:"model_name"`
-	IsActive   bool      `json:"is_active" gorm:"default:true"`
-	CreatedAt  time.Time `json:"created_at"`
-}
-
 func (s *AISession) Trim(maxTurns int) {
 	if len(s.RecentTurns) > maxTurns {
 		s.RecentTurns = s.RecentTurns[len(s.RecentTurns)-maxTurns:]
 	}
-}
-
-func (s *AISession) TrimWithToken(maxToken int) {
-	// 优先保留最新的记录
 }
 
 func (s *AISession) AddTurns(user, ai string) {

@@ -75,8 +75,8 @@ func (m *OpenAIClientManager) RemoveClient(apiKey, baseURL string) {
 	delete(m.clients, cacheKey)
 }
 
-// ValidateClient 验证客户端配置是否有效
-func ValidateClient(ctx context.Context, apiKey, baseURL string) error {
+// validateClient 验证客户端配置是否有效
+func validateClient(ctx context.Context, apiKey, baseURL string) error {
 	client := openai.NewClient(
 		option.WithAPIKey(apiKey),
 		option.WithBaseURL(baseURL),

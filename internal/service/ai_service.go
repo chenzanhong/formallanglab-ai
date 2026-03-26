@@ -44,8 +44,9 @@ type AIService interface {
 	IncrementAICallCount(ctx context.Context, userID string) error                                // 增加调用计数
 	GetCustomAIModel(ctx context.Context, modelID int64, userID int64) (map[string]string, error) // 获取自定义AI模型配置
 	// 自定义AI模型相关方法
-	AddCustomAIModel(ctx context.Context, userID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error)
 	GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error)
+	ValidateClient(ctx context.Context, apiKey, baseURL string) error
+	AddCustomAIModel(ctx context.Context, userID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error)
 	UpdateCustomAIModel(ctx context.Context, userID int64, modelID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error)
 	DeleteCustomAIModel(ctx context.Context, userID int64, modelID int64) error
 	GetUserCurrentModelID(ctx context.Context, userID int64) (*int64, error)
@@ -316,6 +317,11 @@ func (s *AIServiceImpl) AddCustomAIModel(ctx context.Context, userID int64, req 
 // GetCustomAIModels 获取用户的自定义AI模型配置列表
 func (s *AIServiceImpl) GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error) {
 	return s.userAIRepo.GetCustomAIModels(ctx, userID)
+}
+
+// ValidateClient 验证自定义AI模型配置是否有效
+func (s *AIServiceImpl) ValidateClient(ctx context.Context, apiKey, baseURL string) error {
+	return validateClient(ctx, apiKey, baseURL)
 }
 
 // UpdateCustomAIModel 更新自定义AI模型配置

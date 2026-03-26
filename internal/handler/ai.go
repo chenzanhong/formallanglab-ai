@@ -558,6 +558,17 @@ func (h *AIHandler) AddCustomAIModel(c *gin.Context) {
 		return
 	}
 
+	// 验证AI客户端连接是否有效
+	if err := h.aiService.ValidateClient(c.Request.Context(), req.APIKey, req.APIBaseURL); err != nil {
+		zlog.Warnw("AI客户端验证失败", "error", err, "provider", req.Provider, "base_url", req.APIBaseURL)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":  "模型连接验证失败，请检查API密钥和Base URL是否正确",
+			"detail": err.Error(),
+			"result": false,
+		})
+		return
+	}
+
 	// 添加自定义模型
 	_, err := h.aiService.AddCustomAIModel(c.Request.Context(), userID.(int64), &req)
 	if err != nil {
@@ -629,6 +640,17 @@ func (h *AIHandler) UpdateCustomAIModel(c *gin.Context) {
 	var req dto.CustomAIModelRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效", "result": false})
+		return
+	}
+
+	// 验证AI客户端连接是否有效
+	if err := h.aiService.ValidateClient(c.Request.Context(), req.APIKey, req.APIBaseURL); err != nil {
+		zlog.Warnw("AI客户端验证失败", "error", err, "provider", req.Provider, "base_url", req.APIBaseURL)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":  "模型连接验证失败，请检查API密钥和Base URL是否正确",
+			"detail": err.Error(),
+			"result": false,
+		})
 		return
 	}
 
