@@ -58,20 +58,20 @@ type AIServiceImpl struct {
 	repo          repository.AIRepository
 	qaCache       *model.QACache // 显式依赖
 	aiCfg         configs.AIConfig
-	authRepo      repository.UserRepository // 用户仓库，用于获取自定义AI模型配置
+	userAIRepo    repository.UserAIRepository // 用户仓库，用于获取自定义AI模型配置
 }
 
 func NewAIService(
 	clientManager *OpenAIClientManager,
 	repo repository.AIRepository,
-	authRepo repository.UserRepository,
+	userAIRepo repository.UserAIRepository,
 	qaCache *model.QACache,
 	aiCfg configs.AIConfig,
 ) AIService {
 	return &AIServiceImpl{
 		clientManager: clientManager,
 		repo:          repo,
-		authRepo:      authRepo,
+		userAIRepo:    userAIRepo,
 		qaCache:       qaCache,
 		aiCfg:         aiCfg,
 	}
@@ -264,7 +264,7 @@ func (s *AIServiceImpl) GetCustomAIModel(ctx context.Context, modelID int64, use
 		return modelConfig, nil
 	}
 
-	model, err := s.authRepo.GetCustomAIModelByID(ctx, modelID, userID)
+	model, err := s.userAIRepo.GetCustomAIModelByID(ctx, modelID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +295,7 @@ func (s *AIServiceImpl) AddCustomAIModel(ctx context.Context, userID int64, req 
 		IsActive:   true,
 	}
 
-	if err := s.authRepo.AddCustomAIModel(ctx, aiModel); err != nil {
+	if err := s.userAIRepo.AddCustomAIModel(ctx, aiModel); err != nil {
 		return nil, err
 	}
 
@@ -315,12 +315,12 @@ func (s *AIServiceImpl) AddCustomAIModel(ctx context.Context, userID int64, req 
 
 // GetCustomAIModels 获取用户的自定义AI模型配置列表
 func (s *AIServiceImpl) GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error) {
-	return s.authRepo.GetCustomAIModels(ctx, userID)
+	return s.userAIRepo.GetCustomAIModels(ctx, userID)
 }
 
 // UpdateCustomAIModel 更新自定义AI模型配置
 func (s *AIServiceImpl) UpdateCustomAIModel(ctx context.Context, userID int64, modelID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error) {
-	existingModel, err := s.authRepo.GetCustomAIModelByID(ctx, modelID, userID)
+	existingModel, err := s.userAIRepo.GetCustomAIModelByID(ctx, modelID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +332,7 @@ func (s *AIServiceImpl) UpdateCustomAIModel(ctx context.Context, userID int64, m
 	existingModel.ModelName = req.ModelName
 	existingModel.IsActive = true
 
-	if err := s.authRepo.UpdateCustomAIModel(ctx, existingModel); err != nil {
+	if err := s.userAIRepo.UpdateCustomAIModel(ctx, existingModel); err != nil {
 		return nil, err
 	}
 
@@ -352,7 +352,7 @@ func (s *AIServiceImpl) UpdateCustomAIModel(ctx context.Context, userID int64, m
 
 // DeleteCustomAIModel 删除自定义AI模型配置
 func (s *AIServiceImpl) DeleteCustomAIModel(ctx context.Context, userID int64, modelID int64) error {
-	if err := s.authRepo.DeleteCustomAIModel(ctx, modelID, userID); err != nil {
+	if err := s.userAIRepo.DeleteCustomAIModel(ctx, modelID, userID); err != nil {
 		return err
 	}
 
@@ -361,24 +361,24 @@ func (s *AIServiceImpl) DeleteCustomAIModel(ctx context.Context, userID int64, m
 
 // GetUserCurrentModelID 获取用户当前使用的模型ID
 func (s *AIServiceImpl) GetUserCurrentModelID(ctx context.Context, userID int64) (*int64, error) {
-	return s.authRepo.GetUserCurrentModelID(ctx, userID)
+	return s.userAIRepo.GetUserCurrentModelID(ctx, userID)
 }
 
 // UpdateUserCurrentModel 更新用户当前使用的模型ID
 func (s *AIServiceImpl) UpdateUserCurrentModel(ctx context.Context, userID int64, modelID *int64) error {
-	return s.authRepo.UpdateUserCurrentModel(ctx, userID, modelID)
+	return s.userAIRepo.UpdateUserCurrentModel(ctx, userID, modelID)
 }
 
 // GetAIConfig 获取用户的AI配置
 func (s *AIServiceImpl) GetAIConfig(ctx context.Context, userID int64) (*dto.AIConfigResponse, error) {
 	// 获取当前模型ID
-	currentModelID, err := s.authRepo.GetUserCurrentModelID(ctx, userID)
+	currentModelID, err := s.userAIRepo.GetUserCurrentModelID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	// 获取自定义模型列表
-	customModels, err := s.authRepo.GetCustomAIModels(ctx, userID)
+	customModels, err := s.userAIRepo.GetCustomAIModels(ctx, userID)
 	if err != nil {
 		return nil, err
 	}

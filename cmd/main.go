@@ -32,13 +32,18 @@ func main() {
 	// 2. 设置环境变量，确保未有的环境变量有值
 	cf.SyncConfigToEnv(config)
 
-	// 3. 设置JWT密钥
+	// 3. 设置 JWT 密钥
 	middleware.SetJWTKey(config.JWT.Key)
 
 	// 4. 初始化日志
 	zlog.InitLogger(config.Log)
 
-	jwtx.InitWithHS256(config.JWT.Key, &middleware.Claims{}, jwtx.WithAutoInject(true))
+	// 使用环境变量中的 JWT key，确保与 auth 服务一致
+	jwtKey := os.Getenv("JWT_KEY")
+	if jwtKey == "" {
+		jwtKey = config.JWT.Key
+	}
+	jwtx.InitWithHS256(jwtKey, &middleware.Claims{}, jwtx.WithAutoInject(true))
 
 	// 5. 初始化Redis
 	redisClient, err := repository.InitRedis()
@@ -53,7 +58,7 @@ func main() {
 	}
 
 	// 7. 初始化用户仓库
-	authRepo := repository.NewUserRepository(db, redisClient)
+	userAIRepo := repository.NewUserAIRepository(db, redisClient)
 
 	// // 8. 初始化OpenAI客户端
 	// apiKey := os.Getenv("DASHSCOPE_API_KEY")
@@ -100,7 +105,7 @@ func main() {
 	zlog.Infow("Default OpenAI client initialized", "baseURL", baseURL)
 
 	// 10. 创建AI服务
-	aiService := service.NewAIService(clientManager, aiRepo, authRepo, qaCache, config.AI)
+	aiService := service.NewAIService(clientManager, aiRepo, userAIRepo, qaCache, config.AI)
 	// 启动pprof http服务
 	go func() {
 		zlog.Info("Starting pprof on localhost:" + os.Getenv("PPROF_PORT"))

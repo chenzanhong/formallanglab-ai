@@ -41,8 +41,9 @@ func AuthWebsocket() gin.HandlerFunc {
 			return
 		}
 
-		// 把用户名存入上下文，供 handler 使用
+		// 把用户名和用户 ID 存入上下文，供 handler 使用
 		c.Set("username", claims.Username)
+		c.Set("user_id", claims.UserID)
 		c.Next() // 继续执行 handler（即你的 AIChatWS）
 	}
 }

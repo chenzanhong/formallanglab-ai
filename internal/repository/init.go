@@ -1,29 +1,18 @@
 package repository
 
 import (
-	"ai/internal/domain/model"
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/chenzanhong/zlog"
 	"github.com/redis/go-redis/v9"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
-
-// User 用户模型
-type User struct {
-	ID             int64                 `json:"id" gorm:"primarykey"`
-	Name           string                `json:"name"`
-	Password       string                `json:"password"`
-	Token          string                `json:"token"`
-	Email          string                `json:"email"`
-	CurrentModelID *int64                `json:"current_model_id" gorm:"default:null"` // 为nil表示使用默认模型
-	CustomAIModels []model.CustomAIModel `json:"custom_ai_models" gorm:"foreignKey:UserID"`
-}
 
 func InitRedis() (*redis.Client, error) {
 	host := os.Getenv("REDIS_HOST")
@@ -74,133 +63,68 @@ func InitDB() (*gorm.DB, error) {
 	password := os.Getenv("DB_PASSWORD")
 	dbname := os.Getenv("DB_NAME")
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		user, password, host, port, dbname)
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
 
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %v", err)
 	}
 
-	// 自动迁移模型
-	err = db.AutoMigrate(&User{}, &model.CustomAIModel{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to migrate database: %v", err)
+	ctx := context.Background()
+	if err := InitPGData(db, ctx); err != nil {
+		return nil, fmt.Errorf("failed to init pg data: %w", err)
 	}
 
 	zlog.Info("Database connected successfully")
 	return db, nil
 }
 
-// UserRepository 定义用户仓库接口
-type UserRepository interface {
-	// 自定义AI模型相关方法
-	AddCustomAIModel(ctx context.Context, model *model.CustomAIModel) error
-	GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error)
-	GetCustomAIModelByID(ctx context.Context, id int64, userID int64) (*model.CustomAIModel, error)
-	UpdateCustomAIModel(ctx context.Context, model *model.CustomAIModel) error
-	DeleteCustomAIModel(ctx context.Context, id int64, userID int64) error
-	GetUserCurrentModelID(ctx context.Context, userID int64) (*int64, error)
-	UpdateUserCurrentModel(ctx context.Context, userID int64, modelID *int64) error
-	CheckModelOwnership(ctx context.Context, modelID int64, userID int64) (bool, error)
-}
-
-// UserRepositoryImpl 实现用户仓库接口
-type UserRepositoryImpl struct {
-	DB    *gorm.DB
-	Redis *redis.Client
-}
-
-// NewUserRepository 创建用户仓库实例
-func NewUserRepository(db *gorm.DB, redis *redis.Client) UserRepository {
-	return &UserRepositoryImpl{DB: db, Redis: redis}
-}
-
-// AddCustomAIModel 添加自定义AI模型配置
-func (r *UserRepositoryImpl) AddCustomAIModel(ctx context.Context, model *model.CustomAIModel) error {
-	return r.DB.WithContext(ctx).Create(model).Error
-}
-
-// GetCustomAIModels 获取用户的自定义AI模型配置列表
-func (r *UserRepositoryImpl) GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error) {
-	var models []*model.CustomAIModel
-	if err := r.DB.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC").Find(&models).Error; err != nil {
-		return nil, err
+// InitPGData 执行 PostgreSQL 数据初始化（执行 migrations 目录下的 SQL 文件）
+func InitPGData(db *gorm.DB, ctx context.Context) error {
+	if db == nil {
+		return fmt.Errorf("database connection not initialized")
 	}
-	return models, nil
-}
 
-// GetCustomAIModelByID 根据ID获取自定义AI模型配置
-func (r *UserRepositoryImpl) GetCustomAIModelByID(ctx context.Context, id int64, userID int64) (*model.CustomAIModel, error) {
-	var model model.CustomAIModel
-	if err := r.DB.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&model).Error; err != nil {
-		return nil, err
+	migrationsDir := "./migrations" // 相对于工作目录
+	files, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		return fmt.Errorf("failed to read migrations directory: %w", err)
 	}
-	return &model, nil
-}
 
-// UpdateCustomAIModel 更新自定义AI模型配置
-func (r *UserRepositoryImpl) UpdateCustomAIModel(ctx context.Context, model *model.CustomAIModel) error {
-	return r.DB.WithContext(ctx).Save(model).Error
-}
+	tx := db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
 
-// DeleteCustomAIModel 删除自定义AI模型配置
-func (r *UserRepositoryImpl) DeleteCustomAIModel(ctx context.Context, id int64, userID int64) error {
-	// 开始事务
-	tx := r.DB.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
+			panic(r)
 		}
 	}()
 
-	// 检查该模型是否是用户当前使用的模型
-	var user User
-	if err := tx.Select("current_model_id").Where("id = ?", userID).First(&user).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
+	for _, file := range files {
+		if !file.IsDir() && filepath.Ext(file.Name()) == ".sql" {
+			filePath := filepath.Join(migrationsDir, file.Name())
+			fmt.Println("Execute: ", filePath)
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				tx.Rollback()
+				return fmt.Errorf("读取文件失败 %s: %w", filePath, err)
+			}
 
-	// 如果是当前使用的模型，将current_model_id设置为nil
-	if user.CurrentModelID != nil && *user.CurrentModelID == id {
-		if err := tx.Model(&User{}).Where("id = ?", userID).Update("current_model_id", nil).Error; err != nil {
-			tx.Rollback()
-			return err
+			if err = tx.WithContext(ctx).Exec(string(content)).Error; err != nil {
+				tx.Rollback()
+				return fmt.Errorf("执行 SQL 失败 %s: %w", filePath, err)
+			}
 		}
 	}
 
-	// 删除模型
-	if err := tx.Where("id = ? AND user_id = ?", id, userID).Delete(&model.CustomAIModel{}).Error; err != nil {
-		tx.Rollback()
-		return err
+	if err := tx.WithContext(ctx).Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+	fmt.Println("Migration completed successfully.")
 
-	return tx.Commit().Error
-}
-
-// GetUserCurrentModelID 获取用户当前使用的模型ID
-func (r *UserRepositoryImpl) GetUserCurrentModelID(ctx context.Context, userID int64) (*int64, error) {
-	var user User
-	result := r.DB.WithContext(ctx).Select("current_model_id").Where("id = ?", userID).First(&user)
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			return nil, nil // 用户不存在，返回nil
-		}
-		return nil, result.Error
-	}
-	return user.CurrentModelID, nil
-}
-
-// UpdateUserCurrentModel 更新用户当前使用的模型ID
-func (r *UserRepositoryImpl) UpdateUserCurrentModel(ctx context.Context, userID int64, modelID *int64) error {
-	return r.DB.WithContext(ctx).Model(&User{}).Where("id = ?", userID).Update("current_model_id", modelID).Error
-}
-
-// CheckModelOwnership 检查模型是否属于指定用户
-func (r *UserRepositoryImpl) CheckModelOwnership(ctx context.Context, modelID int64, userID int64) (bool, error) {
-	var count int64
-	if err := r.DB.WithContext(ctx).Model(&model.CustomAIModel{}).Where("id = ? AND user_id = ?", modelID, userID).Count(&count).Error; err != nil {
-		return false, err
-	}
-	return count > 0, nil
+	return nil
 }
