@@ -53,6 +53,7 @@ type AIConfig struct {
 	SessionExpireSeconds int    `yaml:"session_expire_seconds"`
 	MaxSessionTurns      int    `yaml:"max_session_turns"` // 最大对话记录数
 	MaxCtxToken          int    `yaml:"max_ctx_token"`
+	CryptoKey            string `yaml:"crypto_key"` // 用于加密解密 api_key
 	// ChromaURL      string `yaml:"chroma_url"`
 	// ChromaCollection string `yaml:"chroma_collection"`
 }
@@ -177,7 +178,7 @@ func ApplyEnvToConfig(cfg *Config) {
 	cfg.AI.SessionExpireSeconds = getEnvInt("SESSION_EXPIRE_SECONDS", cfg.AI.SessionExpireSeconds)
 	cfg.AI.MaxSessionTurns = getEnvInt("MAX_SESSION_TURNS", cfg.AI.MaxSessionTurns)
 	cfg.AI.MaxCtxToken = getEnvInt("MAX_CTX_TOKEN", cfg.AI.MaxCtxToken)
-
+	cfg.AI.CryptoKey = getEnv("CRYPTO_KEY", cfg.AI.CryptoKey)
 	// Log
 	// 注意：zlog.Level 需要能从字符串解析
 	if levelStr := getEnv("LOG_LEVEL", cfg.Log.Level.String()); levelStr != "" {
@@ -246,6 +247,7 @@ func SyncConfigToEnv(cfg *Config) {
 	setEnvInt("SESSION_EXPIRE_SECONDS", cfg.AI.SessionExpireSeconds)
 	setEnvInt("MAX_SESSION_TURNS", cfg.AI.MaxSessionTurns)
 	setEnvInt("MAX_CTX_TOKEN", cfg.AI.MaxCtxToken)
+	setEnv("CRYPTO_KEY", cfg.AI.CryptoKey)
 	setEnv("LOG_LEVEL", cfg.Log.Level.String())
 	setEnv("LOG_OUTPUT", cfg.Log.Output)
 	setEnv("LOG_FORMAT", cfg.Log.Format)

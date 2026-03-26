@@ -47,12 +47,12 @@ type CustomAIModelOperationResponse struct {
 
 // SwitchModelRequest 切换模型请求
 type SwitchModelRequest struct {
-	ModelID *int64 `json:"model_id"` // 为nil表示切换到默认模型
+	ModelID int64 `json:"model_id"` // 0 表示切换到默认模型
 }
 
 // AIConfigResponse AI配置响应
 type AIConfigResponse struct {
-	CurrentModelID *int64                  `json:"current_model_id"` // 为nil表示使用默认模型
+	CurrentModelID int64                   `json:"current_model_id"` // 0 表示使用默认模型
 	RemainingQuota int                     `json:"remaining_quota"`  // 默认模型剩余次数
 	CustomModels   []CustomAIModelResponse `json:"custom_models"`    // 自定义模型列表
 }

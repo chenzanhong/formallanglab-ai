@@ -5,7 +5,9 @@ import (
 	"ai/internal/domain/dto"
 	"ai/internal/domain/model"
 	"ai/internal/repository"
+	"ai/internal/utils"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"github.com/chenzanhong/zlog"
 	"github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/packages/ssestream"
+	"gorm.io/gorm"
 )
 
 const (
@@ -49,8 +52,8 @@ type AIService interface {
 	AddCustomAIModel(ctx context.Context, userID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error)
 	UpdateCustomAIModel(ctx context.Context, userID int64, modelID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error)
 	DeleteCustomAIModel(ctx context.Context, userID int64, modelID int64) error
-	GetUserCurrentModelID(ctx context.Context, userID int64) (*int64, error)
-	UpdateUserCurrentModel(ctx context.Context, userID int64, modelID *int64) error
+	GetUserCurrentModelID(ctx context.Context, userID int64) (int64, error)
+	UpdateUserCurrentModel(ctx context.Context, userID int64, modelID int64) error
 	GetAIConfig(ctx context.Context, userID int64) (*dto.AIConfigResponse, error)
 }
 
@@ -109,24 +112,37 @@ func (s *AIServiceImpl) StreamChat(ctx context.Context, session *model.AISession
 			return nil, fmt.Errorf("failed to get custom model: %w", err)
 		}
 
+		// 解密 API 密钥
+		decryptedAPIKey, err := utils.Decrypt(modelConfig["api_key"], s.aiCfg.CryptoKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt api key: %w", err)
+		}
+
 		// 动态创建客户端
-		client := s.clientManager.GetClient(modelConfig["api_key"], modelConfig["base_url"])
+		client, err := s.clientManager.GetClient(decryptedAPIKey, modelConfig["base_url"])
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client: %w", err)
+		}
 		stream = client.Chat.Completions.NewStreaming(
 			ctx, openai.ChatCompletionNewParams{
 				Messages: messages,
 				Model:    modelConfig["model"],
 			},
 		)
-	} else {
-		// 使用默认模型
-		client := s.clientManager.GetDefaultClient(os.Getenv("DASHSCOPE_API_KEY"), os.Getenv("DASHSCOPE_BASE_URL"))
-		stream = client.Chat.Completions.NewStreaming(
-			ctx, openai.ChatCompletionNewParams{
-				Messages: messages,
-				Model:    os.Getenv("DASHSCOPE_MODEL"),
-			},
-		)
+		return stream, nil
 	}
+
+	// 使用默认模型
+	client, err := s.clientManager.GetDefaultClient(s.aiCfg.DashscopeAPIKey, s.aiCfg.DashscopeBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default client: %w", err)
+	}
+	stream = client.Chat.Completions.NewStreaming(
+		ctx, openai.ChatCompletionNewParams{
+			Messages: messages,
+			Model:    os.Getenv("DASHSCOPE_MODEL"),
+		},
+	)
 
 	return stream, nil
 }
@@ -270,6 +286,7 @@ func (s *AIServiceImpl) GetCustomAIModel(ctx context.Context, modelID int64, use
 		return nil, err
 	}
 
+	// 保持 API key 加密状态，直接存储到 Redis
 	modelConfig = map[string]string{
 		"api_key":  model.APIKey,
 		"base_url": model.APIBaseURL,
@@ -286,29 +303,39 @@ func (s *AIServiceImpl) GetCustomAIModel(ctx context.Context, modelID int64, use
 
 // AddCustomAIModel 添加自定义AI模型配置
 func (s *AIServiceImpl) AddCustomAIModel(ctx context.Context, userID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error) {
+	// 加密 API key
+	encryptedAPIKey, err := utils.Encrypt(req.APIKey, s.aiCfg.CryptoKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt API key: %w", err)
+	}
+
 	aiModel := &model.CustomAIModel{
 		UserID:     userID,
 		Name:       req.Name,
 		Provider:   req.Provider,
-		APIKey:     req.APIKey,
+		APIKey:     encryptedAPIKey,
 		APIBaseURL: req.APIBaseURL,
 		ModelName:  req.ModelName,
 		IsActive:   true,
 	}
 
 	if err := s.userAIRepo.AddCustomAIModel(ctx, aiModel); err != nil {
+		// 是否是唯一键冲突（API key 已存在）
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			return nil, fmt.Errorf("the configuration already exists")
+		}
 		return nil, err
 	}
 
 	modelConfig := map[string]string{
-		"api_key":  aiModel.APIKey,
+		"api_key":  encryptedAPIKey,
 		"base_url": aiModel.APIBaseURL,
 		"model":    aiModel.ModelName,
 		"provider": aiModel.Provider,
 	}
 
 	if err := s.repo.SaveCustomAIModelToRedis(ctx, aiModel.ID, userID, modelConfig); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to save custom ai model to redis: %w", err)
 	}
 
 	return aiModel, nil
@@ -316,7 +343,12 @@ func (s *AIServiceImpl) AddCustomAIModel(ctx context.Context, userID int64, req 
 
 // GetCustomAIModels 获取用户的自定义AI模型配置列表
 func (s *AIServiceImpl) GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error) {
-	return s.userAIRepo.GetCustomAIModels(ctx, userID)
+	models, err := s.userAIRepo.GetCustomAIModels(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return models, nil
 }
 
 // ValidateClient 验证自定义AI模型配置是否有效
@@ -331,9 +363,15 @@ func (s *AIServiceImpl) UpdateCustomAIModel(ctx context.Context, userID int64, m
 		return nil, err
 	}
 
+	// 加密 API key
+	encryptedAPIKey, err := utils.Encrypt(req.APIKey, s.aiCfg.CryptoKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt API key: %w", err)
+	}
+
 	existingModel.Name = req.Name
 	existingModel.Provider = req.Provider
-	existingModel.APIKey = req.APIKey
+	existingModel.APIKey = encryptedAPIKey
 	existingModel.APIBaseURL = req.APIBaseURL
 	existingModel.ModelName = req.ModelName
 	existingModel.IsActive = true
@@ -343,7 +381,7 @@ func (s *AIServiceImpl) UpdateCustomAIModel(ctx context.Context, userID int64, m
 	}
 
 	modelConfig := map[string]string{
-		"api_key":  existingModel.APIKey,
+		"api_key":  encryptedAPIKey,
 		"base_url": existingModel.APIBaseURL,
 		"model":    existingModel.ModelName,
 		"provider": existingModel.Provider,
@@ -366,12 +404,12 @@ func (s *AIServiceImpl) DeleteCustomAIModel(ctx context.Context, userID int64, m
 }
 
 // GetUserCurrentModelID 获取用户当前使用的模型ID
-func (s *AIServiceImpl) GetUserCurrentModelID(ctx context.Context, userID int64) (*int64, error) {
+func (s *AIServiceImpl) GetUserCurrentModelID(ctx context.Context, userID int64) (int64, error) {
 	return s.userAIRepo.GetUserCurrentModelID(ctx, userID)
 }
 
 // UpdateUserCurrentModel 更新用户当前使用的模型ID
-func (s *AIServiceImpl) UpdateUserCurrentModel(ctx context.Context, userID int64, modelID *int64) error {
+func (s *AIServiceImpl) UpdateUserCurrentModel(ctx context.Context, userID int64, modelID int64) error {
 	return s.userAIRepo.UpdateUserCurrentModel(ctx, userID, modelID)
 }
 

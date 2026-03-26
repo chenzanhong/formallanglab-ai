@@ -101,7 +101,10 @@ func main() {
 		zlog.Fatalf("DASHSCOPE_BASE_URL is required")
 	}
 	// 预先创建默认客户端，后续使用时直接从缓存获取
-	_ = clientManager.GetClient(apiKey, baseURL)
+	_, err = clientManager.GetDefaultClient(apiKey, baseURL)
+	if err != nil {
+		zlog.Fatalf("Failed to initialize default OpenAI client: %v", err)
+	}
 	zlog.Infow("Default OpenAI client initialized", "baseURL", baseURL)
 
 	// 10. 创建AI服务

@@ -24,7 +24,7 @@ func NewOpenAIClientManager() *OpenAIClientManager {
 
 // GetClient 获取或创建OpenAI客户端
 // 使用apiKey和baseURL的组合作为缓存键
-func (m *OpenAIClientManager) GetClient(apiKey, baseURL string) *openai.Client {
+func (m *OpenAIClientManager) GetClient(apiKey, baseURL string) (*openai.Client, error) {
 	// 生成缓存键
 	cacheKey := fmt.Sprintf("%s|%s", baseURL, apiKey)
 
@@ -32,7 +32,7 @@ func (m *OpenAIClientManager) GetClient(apiKey, baseURL string) *openai.Client {
 	m.mu.RLock()
 	if client, exists := m.clients[cacheKey]; exists {
 		m.mu.RUnlock()
-		return client
+		return client, nil
 	}
 	m.mu.RUnlock()
 
@@ -42,7 +42,7 @@ func (m *OpenAIClientManager) GetClient(apiKey, baseURL string) *openai.Client {
 
 	// 双重检查，防止并发创建
 	if client, exists := m.clients[cacheKey]; exists {
-		return client
+		return client, nil
 	}
 
 	// 创建新客户端
@@ -52,12 +52,16 @@ func (m *OpenAIClientManager) GetClient(apiKey, baseURL string) *openai.Client {
 	)
 
 	m.clients[cacheKey] = &client
-	return &client
+	return &client, nil
 }
 
 // GetDefaultClient 获取默认配置的客户端
-func (m *OpenAIClientManager) GetDefaultClient(defaultAPIKey, defaultBaseURL string) *openai.Client {
-	return m.GetClient(defaultAPIKey, defaultBaseURL)
+func (m *OpenAIClientManager) GetDefaultClient(defaultAPIKey, defaultBaseURL string) (*openai.Client, error) {
+	client, err := m.GetClient(defaultAPIKey, defaultBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 // ClearCache 清空客户端缓存

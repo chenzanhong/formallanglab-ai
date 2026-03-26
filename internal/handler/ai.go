@@ -573,7 +573,7 @@ func (h *AIHandler) AddCustomAIModel(c *gin.Context) {
 	_, err := h.aiService.AddCustomAIModel(c.Request.Context(), userID.(int64), &req)
 	if err != nil {
 		zlog.Warnw("添加自定义AI模型失败", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "添加自定义AI模型失败", "result": false})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "添加自定义AI模型失败：" + err.Error(), "result": false})
 		return
 	}
 

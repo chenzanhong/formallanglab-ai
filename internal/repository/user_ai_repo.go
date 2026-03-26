@@ -10,9 +10,9 @@ import (
 
 // UserAIProfile 用户 AI 配置表，存储用户的 AI 相关配置
 type UserAIProfile struct {
-	ID             int64  `json:"id" gorm:"primarykey"`
-	UserID         int64  `json:"user_id" gorm:"column:user_id"`  // 关联 Auth 服务的用户 ID
-	CurrentModelID *int64 `json:"current_model_id" gorm:"column:current_model_id"` // 为 nil 表示使用默认模型
+	ID             int64 `json:"id" gorm:"primarykey"`
+	UserID         int64 `json:"user_id" gorm:"column:user_id"`                   // 关联 Auth 服务的用户 ID
+	CurrentModelID int64 `json:"current_model_id" gorm:"column:current_model_id"` // 0 表示使用默认模型
 }
 
 // TableName 指定表名
@@ -28,8 +28,8 @@ type UserAIRepository interface {
 	GetCustomAIModelByID(ctx context.Context, id int64, userID int64) (*model.CustomAIModel, error)
 	UpdateCustomAIModel(ctx context.Context, model *model.CustomAIModel) error
 	DeleteCustomAIModel(ctx context.Context, id int64, userID int64) error
-	GetUserCurrentModelID(ctx context.Context, userID int64) (*int64, error)
-	UpdateUserCurrentModel(ctx context.Context, userID int64, modelID *int64) error
+	GetUserCurrentModelID(ctx context.Context, userID int64) (int64, error)
+	UpdateUserCurrentModel(ctx context.Context, userID int64, modelID int64) error
 	CheckModelOwnership(ctx context.Context, modelID int64, userID int64) (bool, error)
 	EnsureUserAIProfile(ctx context.Context, userID int64) error
 }
@@ -90,9 +90,9 @@ func (r *UserAIRepositoryImpl) DeleteCustomAIModel(ctx context.Context, id int64
 		return err
 	}
 
-	// 如果是当前使用的模型，将current_model_id设置为nil
-	if currentModelID != nil && *currentModelID == id {
-		if err := r.UpdateUserCurrentModel(ctx, userID, nil); err != nil {
+	// 如果是当前使用的模型，将current_model_id设置为0（默认模型）
+	if currentModelID != 0 && currentModelID == id {
+		if err := r.UpdateUserCurrentModel(ctx, userID, 0); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -108,25 +108,25 @@ func (r *UserAIRepositoryImpl) DeleteCustomAIModel(ctx context.Context, id int64
 }
 
 // GetUserCurrentModelID 获取用户当前使用的模型ID
-func (r *UserAIRepositoryImpl) GetUserCurrentModelID(ctx context.Context, userID int64) (*int64, error) {
+func (r *UserAIRepositoryImpl) GetUserCurrentModelID(ctx context.Context, userID int64) (int64, error) {
 	var profile UserAIProfile
 	result := r.DB.WithContext(ctx).Where("user_id = ?", userID).First(&profile)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			// 用户AI配置不存在，返回nil
+			// 用户AI配置不存在，返回0（默认模型）
 			err := r.EnsureUserAIProfile(ctx, userID)
 			if err != nil {
-				return nil, err
+				return 0, err
 			}
-			return nil, nil
+			return 0, nil
 		}
-		return nil, result.Error
+		return 0, result.Error
 	}
 	return profile.CurrentModelID, nil
 }
 
 // UpdateUserCurrentModel 更新用户当前使用的模型ID
-func (r *UserAIRepositoryImpl) UpdateUserCurrentModel(ctx context.Context, userID int64, modelID *int64) error {
+func (r *UserAIRepositoryImpl) UpdateUserCurrentModel(ctx context.Context, userID int64, modelID int64) error {
 	// 确保用户AI配置存在
 	err := r.EnsureUserAIProfile(ctx, userID)
 	if err != nil {
@@ -155,7 +155,7 @@ func (r *UserAIRepositoryImpl) EnsureUserAIProfile(ctx context.Context, userID i
 	if count == 0 {
 		profile := UserAIProfile{
 			UserID:         userID,
-			CurrentModelID: nil,
+			CurrentModelID: 0,
 		}
 		return r.DB.WithContext(ctx).Create(&profile).Error
 	}
