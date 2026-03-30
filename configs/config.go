@@ -29,6 +29,14 @@ type RedisConfig struct {
 	MaxIdleConn int    `yaml:"max_idle_conn"`
 }
 
+type PGConfig struct {
+	Host     string `yaml:"host"`
+	Port     string `yaml:"port"`
+	Name     string `yaml:"name"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+}
+
 type RateConfig struct {
 	UserRate  int `yaml:"user_rate"`
 	UserBurst int `yaml:"user_burst"`
@@ -45,6 +53,7 @@ type AIConfig struct {
 	SessionExpireSeconds int    `yaml:"session_expire_seconds"`
 	MaxSessionTurns      int    `yaml:"max_session_turns"` // 最大对话记录数
 	MaxCtxToken          int    `yaml:"max_ctx_token"`
+	CryptoKey            string `yaml:"crypto_key"` // 用于加密解密 api_key
 	// ChromaURL      string `yaml:"chroma_url"`
 	// ChromaCollection string `yaml:"chroma_collection"`
 }
@@ -62,9 +71,9 @@ type LogConfig struct {
 }
 
 type QACacheConfig struct {
-	Path     string `yaml:"path"`
-	UseDB    bool   `yaml:"use_db"`    // 是否使用数据库存储
-	LoadFromFile bool `yaml:"load_from_file"` // 是否从文件加载
+	Path         string `yaml:"path"`
+	UseDB        bool   `yaml:"use_db"`         // 是否使用数据库存储
+	LoadFromFile bool   `yaml:"load_from_file"` // 是否从文件加载
 }
 
 type DBConfig struct {
@@ -79,7 +88,7 @@ type DBConfig struct {
 type Config struct {
 	Server  ServerConfig      `yaml:"server"`
 	Redis   RedisConfig       `yaml:"redis"`
-	DB      DBConfig          `yaml:"db"`
+	PG      PGConfig          `yaml:"pg"`
 	Rate    RateConfig        `yaml:"rate"`
 	JWT     JWTConfig         `yaml:"jwt"`
 	AI      AIConfig          `yaml:"ai"`
@@ -143,6 +152,13 @@ func ApplyEnvToConfig(cfg *Config) {
 	// JWT
 	cfg.JWT.Key = getEnv("JWT_KEY", cfg.JWT.Key)
 
+	// PostgreSQL
+	cfg.PG.Host = getEnv("DB_HOST", cfg.PG.Host)
+	cfg.PG.Port = getEnv("DB_PORT", cfg.PG.Port)
+	cfg.PG.Name = getEnv("DB_NAME", cfg.PG.Name)
+	cfg.PG.User = getEnv("DB_USER", cfg.PG.User)
+	cfg.PG.Password = getEnv("DB_PASSWORD", cfg.PG.Password)
+
 	// Redis
 	cfg.Redis.Host = getEnv("REDIS_HOST", cfg.Redis.Host)
 	cfg.Redis.Port = getEnv("REDIS_PORT", cfg.Redis.Port)
@@ -162,7 +178,7 @@ func ApplyEnvToConfig(cfg *Config) {
 	cfg.AI.SessionExpireSeconds = getEnvInt("SESSION_EXPIRE_SECONDS", cfg.AI.SessionExpireSeconds)
 	cfg.AI.MaxSessionTurns = getEnvInt("MAX_SESSION_TURNS", cfg.AI.MaxSessionTurns)
 	cfg.AI.MaxCtxToken = getEnvInt("MAX_CTX_TOKEN", cfg.AI.MaxCtxToken)
-
+	cfg.AI.CryptoKey = getEnv("CRYPTO_KEY", cfg.AI.CryptoKey)
 	// Log
 	// 注意：zlog.Level 需要能从字符串解析
 	if levelStr := getEnv("LOG_LEVEL", cfg.Log.Level.String()); levelStr != "" {
@@ -191,14 +207,6 @@ func ApplyEnvToConfig(cfg *Config) {
 	cfg.QACache.Path = getEnv("QA_CACHE_DIR", cfg.QACache.Path)
 	cfg.QACache.UseDB = getEnvBool("QA_CACHE_USE_DB", cfg.QACache.UseDB)
 	cfg.QACache.LoadFromFile = getEnvBool("QA_CACHE_LOAD_FROM_FILE", cfg.QACache.LoadFromFile)
-	
-	// DB
-	cfg.DB.Host = getEnv("DB_HOST", cfg.DB.Host)
-	cfg.DB.Port = getEnv("DB_PORT", cfg.DB.Port)
-	cfg.DB.User = getEnv("DB_USER", cfg.DB.User)
-	cfg.DB.Password = getEnv("DB_PASSWORD", cfg.DB.Password)
-	cfg.DB.DBName = getEnv("DB_NAME", cfg.DB.DBName)
-	cfg.DB.SSLMode = getEnv("DB_SSLMODE", cfg.DB.SSLMode)
 }
 
 func parseLogFieldsFromEnv() map[string]string {
@@ -215,7 +223,11 @@ func parseLogFieldsFromEnv() map[string]string {
 }
 
 func SyncConfigToEnv(cfg *Config) {
-	setEnv := func(key, value string) { os.Setenv(key, value) }
+	setEnv := func(key, value string) {
+		if os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
 	setEnvInt := func(key string, value int) { setEnv(key, strconv.Itoa(value)) }
 	setEnvBool := func(key string, value bool) { setEnv(key, strconv.FormatBool(value)) }
 
@@ -235,6 +247,7 @@ func SyncConfigToEnv(cfg *Config) {
 	setEnvInt("SESSION_EXPIRE_SECONDS", cfg.AI.SessionExpireSeconds)
 	setEnvInt("MAX_SESSION_TURNS", cfg.AI.MaxSessionTurns)
 	setEnvInt("MAX_CTX_TOKEN", cfg.AI.MaxCtxToken)
+	setEnv("CRYPTO_KEY", cfg.AI.CryptoKey)
 	setEnv("LOG_LEVEL", cfg.Log.Level.String())
 	setEnv("LOG_OUTPUT", cfg.Log.Output)
 	setEnv("LOG_FORMAT", cfg.Log.Format)
@@ -247,11 +260,10 @@ func SyncConfigToEnv(cfg *Config) {
 	setEnv("QA_CACHE_DIR", cfg.QACache.Path)
 	setEnvBool("QA_CACHE_USE_DB", cfg.QACache.UseDB)
 	setEnvBool("QA_CACHE_LOAD_FROM_FILE", cfg.QACache.LoadFromFile)
-	
-	setEnv("DB_HOST", cfg.DB.Host)
-	setEnv("DB_PORT", cfg.DB.Port)
-	setEnv("DB_USER", cfg.DB.User)
-	setEnv("DB_PASSWORD", cfg.DB.Password)
-	setEnv("DB_NAME", cfg.DB.DBName)
-	setEnv("DB_SSLMODE", cfg.DB.SSLMode)
+
+	setEnv("DB_USER", cfg.PG.User)
+	setEnv("DB_PASSWORD", cfg.PG.Password)
+	setEnv("DB_HOST", cfg.PG.Host)
+	setEnv("DB_PORT", cfg.PG.Port)
+	setEnv("DB_NAME", cfg.PG.Name)
 }
