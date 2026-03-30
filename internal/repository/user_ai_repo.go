@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	"github.com/redis/go-redis/v9"
