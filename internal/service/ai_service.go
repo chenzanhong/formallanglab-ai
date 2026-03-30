@@ -1,11 +1,6 @@
 package service
 
 import (
-	"ai/configs"
-	"ai/internal/domain/dto"
-	"ai/internal/domain/model"
-	"ai/internal/repository"
-	"ai/internal/utils"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chenzanhong/formallanglab-ai/configs"
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/dto"
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
+	"github.com/chenzanhong/formallanglab-ai/internal/repository"
+	"github.com/chenzanhong/formallanglab-ai/internal/utils"
 	"github.com/chenzanhong/zlog"
 	"github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/packages/ssestream"
@@ -129,6 +129,7 @@ func (s *AIServiceImpl) StreamChat(ctx context.Context, session *model.AISession
 				Model:    modelConfig["model"],
 			},
 		)
+
 		return stream, nil
 	}
 
@@ -151,7 +152,6 @@ func (s *AIServiceImpl) buildMessagesWithTruncation(
 	session *model.AISession,
 	req *dto.AIChatRequest,
 ) []openai.ChatCompletionMessageParamUnion {
-
 	// Step 1: 构造必须保留的消息（L1）
 	systemMsg := openai.SystemMessage(systemPrompt)
 	currentQuestion := openai.UserMessage(req.Question)
@@ -213,6 +213,7 @@ func (s *AIServiceImpl) estimateMessagesTokens(messages []openai.ChatCompletionM
 
 	// 加上角色标签等开销（每条消息约 +5~10 tokens）
 	total += len(messages) * 8
+
 	return total
 }
 
@@ -241,6 +242,7 @@ func (s *AIServiceImpl) GetSession(ctx context.Context, username string) (*model
 		session = &model.AISession{}
 	}
 	session.LastActive = time.Now().Unix()
+
 	return session, nil
 }
 
@@ -324,6 +326,7 @@ func (s *AIServiceImpl) AddCustomAIModel(ctx context.Context, userID int64, req 
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			return nil, fmt.Errorf("the configuration already exists")
 		}
+
 		return nil, err
 	}
 

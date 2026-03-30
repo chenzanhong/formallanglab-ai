@@ -1,13 +1,13 @@
 package repository
 
 import (
-	"ai/internal/domain/model"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -37,6 +37,7 @@ func (r *AIRepositoryImpl) SaveSession(ctx context.Context, username string, ses
 	if err != nil {
 		return err
 	}
+
 	return r.redis.Set(ctx, key, data, time.Duration(sessionExpireSeconds)*time.Second).Err()
 }
 
@@ -56,6 +57,7 @@ func (r *AIRepositoryImpl) GetSession(ctx context.Context, username string) (*mo
 	if err := json.Unmarshal(data, &session); err != nil {
 		return nil, err
 	}
+
 	return &session, nil
 }
 
@@ -69,8 +71,10 @@ func (r *AIRepositoryImpl) GetAICallCount(ctx context.Context, userID string) (i
 			// 键不存在，返回0
 			return 0, nil
 		}
+
 		return 0, err
 	}
+
 	return count, nil
 }
 
@@ -85,6 +89,7 @@ func (r *AIRepositoryImpl) IncrementAICallCount(ctx context.Context, userID stri
 	}
 	// 设置过期时间（如果是新键）
 	r.redis.Expire(ctx, key, 24*time.Hour)
+
 	return nil
 }
 
@@ -92,6 +97,7 @@ func (r *AIRepositoryImpl) IncrementAICallCount(ctx context.Context, userID stri
 func (r *AIRepositoryImpl) ResetAICallCount(ctx context.Context, userID string) error {
 	date := time.Now().Format("20060102")
 	key := "ai-" + date + "-" + userID + "-num"
+
 	return r.redis.Del(ctx, key).Err()
 }
 
@@ -103,6 +109,7 @@ func (r *AIRepositoryImpl) GetCustomAIModelFromRedis(ctx context.Context, modelI
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("failed to get ai model from redis: %w", err)
 	}
 
@@ -110,6 +117,7 @@ func (r *AIRepositoryImpl) GetCustomAIModelFromRedis(ctx context.Context, modelI
 	if err := json.Unmarshal(data, &modelConfig); err != nil {
 		return nil, err
 	}
+
 	return modelConfig, nil
 }
 
@@ -120,6 +128,7 @@ func (r *AIRepositoryImpl) SaveCustomAIModelToRedis(ctx context.Context, modelID
 	if err != nil {
 		return err
 	}
+
 	return r.redis.Set(ctx, key, data, 24*time.Hour).Err()
 }
 

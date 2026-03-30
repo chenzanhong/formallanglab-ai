@@ -1,10 +1,10 @@
 package service
 
 import (
-	"ai/internal/domain/model"
-	"ai/internal/repository"
 	"fmt"
 
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
+	"github.com/chenzanhong/formallanglab-ai/internal/repository"
 	"gorm.io/gorm"
 )
 

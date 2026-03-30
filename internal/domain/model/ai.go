@@ -1,9 +1,9 @@
 package model
 
 import (
-	"ai/internal/core"
 	"time"
 
+	"github.com/chenzanhong/formallanglab-ai/internal/core"
 	"gorm.io/gorm"
 )
 

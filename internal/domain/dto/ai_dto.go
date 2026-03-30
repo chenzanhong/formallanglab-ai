@@ -1,8 +1,8 @@
 package dto
 
 import (
-	"ai/internal/core"
-	"ai/internal/domain/model"
+	"github.com/chenzanhong/formallanglab-ai/internal/core"
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 )
 
 type AIChatRequest struct {

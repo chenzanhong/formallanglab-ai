@@ -10,9 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"ai/internal/handler"
-	"ai/internal/service"
-
+	"github.com/chenzanhong/formallanglab-ai/internal/handler"
+	"github.com/chenzanhong/formallanglab-ai/internal/service"
 	"github.com/chenzanhong/zlog"
 	"github.com/redis/go-redis/v9"
 )

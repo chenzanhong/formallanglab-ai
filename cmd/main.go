@@ -1,18 +1,18 @@
 package main
 
 import (
-	cf "ai/configs"
-	"ai/internal/core"
-	"ai/internal/domain/model"
-	"ai/internal/middleware"
-	mtr "ai/internal/middleware/metrics"
-	"ai/internal/repository"
-	"ai/internal/server"
-	"ai/internal/service"
 	"log"
 	"net/http"
 	"os"
 
+	cf "github.com/chenzanhong/formallanglab-ai/configs"
+	"github.com/chenzanhong/formallanglab-ai/internal/core"
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
+	"github.com/chenzanhong/formallanglab-ai/internal/middleware"
+	mtr "github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
+	"github.com/chenzanhong/formallanglab-ai/internal/repository"
+	"github.com/chenzanhong/formallanglab-ai/internal/server"
+	"github.com/chenzanhong/formallanglab-ai/internal/service"
 	"github.com/chenzanhong/goutil/jwtx"
 	"github.com/chenzanhong/zlog"
 )

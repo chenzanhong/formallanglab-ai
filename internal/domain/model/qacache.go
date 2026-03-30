@@ -20,6 +20,7 @@ func NewQACache() *QACache {
 func (c *QACache) Get(key string) string {
 	key = c.normalize(key)
 	fmt.Println("规格化后的提问：", key)
+
 	return c.data[key]
 }
 
@@ -40,6 +41,7 @@ func (c *QACache) normalize(key string) string {
 		return r == '。' || r == '！' || r == '？' ||
 			r == '.' || r == '!' || r == '?'
 	})
+
 	return key
 }
 

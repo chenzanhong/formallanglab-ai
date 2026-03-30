@@ -1,4 +1,4 @@
-module ai
+module github.com/chenzanhong/formallanglab-ai
 
 go 1.24.0
 

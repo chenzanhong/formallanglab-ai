@@ -13,8 +13,10 @@ const (
 	userBurst = 10
 )
 
-var userLimiters sync.Map
-var globalLimiter = rate.NewLimiter(rate.Limit(40), 100)
+var (
+	userLimiters  sync.Map
+	globalLimiter = rate.NewLimiter(rate.Limit(40), 100)
+)
 
 func GetLimiter(username string) *rate.Limiter {
 	if limiter, ok := userLimiters.Load(username); ok {
@@ -38,12 +40,14 @@ func UserRateLimitMiddleware() gin.HandlerFunc {
 		if !exists {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization required"})
 			c.Abort()
+
 			return
 		}
 		username, ok := userStr.(string)
 		if !ok || username == "" {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid username in context"})
 			c.Abort()
+
 			return
 		}
 
@@ -54,6 +58,7 @@ func UserRateLimitMiddleware() gin.HandlerFunc {
 				"error": "Too many requests. Please slow down.",
 			})
 			c.Abort()
+
 			return
 		}
 		c.Next()
@@ -67,6 +72,7 @@ func GlobalRateLimitMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": "Global rate limit exceeded. Please try again later.",
 			})
+
 			return
 		}
 		c.Next()

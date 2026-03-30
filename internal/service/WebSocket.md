@@ -30,10 +30,10 @@
 package api
 
 import (
-	"backend/internal/domain/dto"
-	"backend/internal/metrics"
-	aiSvc "backend/internal/service/ai"
-	"backend/logs"
+	"github.com/chenzanhong/formallanglab-master/internal/domain/dto"
+	"github.com/chenzanhong/formallanglab-master/internal/metrics"
+	aiSvc "github.com/chenzanhong/formallanglab-master/internal/service/ai"
+	"github.com/chenzanhong/formallanglab-master/logs"
 	"context"
 	"encoding/json"
 	"net/http"

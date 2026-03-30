@@ -1,7 +1,7 @@
 package logs
 
 import (
-	cf "ai/configs"
+	cf "github.com/chenzanhong/formallanglab-ai/configs"
 	"context"
 	"fmt"
 	"io"

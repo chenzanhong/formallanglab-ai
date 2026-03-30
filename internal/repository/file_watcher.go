@@ -1,12 +1,12 @@
 package repository
 
 import (
-	"ai/internal/domain/model"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	"github.com/chenzanhong/zlog"
 	"github.com/fsnotify/fsnotify"
 )
@@ -44,7 +44,7 @@ func (w *QACacheWatcher) Start() error {
 	// 确保目录存在
 	if _, err := os.Stat(w.watchedDir); os.IsNotExist(err) {
 		zlog.Warnw("Watched directory does not exist, creating", "dir", w.watchedDir)
-		if err := os.MkdirAll(w.watchedDir, 0755); err != nil {
+		if err := os.MkdirAll(w.watchedDir, 0o755); err != nil {
 			return err
 		}
 	}

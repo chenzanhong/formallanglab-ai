@@ -1,10 +1,8 @@
 package handler
 
 import (
-	"ai/internal/middleware"
-
-	mtr "ai/internal/middleware/metrics"
-
+	"github.com/chenzanhong/formallanglab-ai/internal/middleware"
+	mtr "github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
 	"github.com/chenzanhong/goutil/jwtx"
 	"github.com/gin-gonic/gin"
 )

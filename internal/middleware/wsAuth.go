@@ -8,8 +8,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtKey []byte
-var done sync.Once
+var (
+	jwtKey []byte
+	done   sync.Once
+)
 
 func SetJWTKey(key string) {
 	done.Do(func() {
@@ -24,6 +26,7 @@ func AuthWebsocket() gin.HandlerFunc {
 		if tokenStr == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			c.Abort()
+
 			return
 		}
 
@@ -32,12 +35,14 @@ func AuthWebsocket() gin.HandlerFunc {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
+
 			return jwtKey, nil
 		})
 
 		if err != nil || !token.Valid {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			c.Abort()
+
 			return
 		}
 

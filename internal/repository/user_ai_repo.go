@@ -1,9 +1,9 @@
 package repository
 
 import (
-	"ai/internal/domain/model"
 	"context"
 
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -56,6 +56,7 @@ func (r *UserAIRepositoryImpl) GetCustomAIModels(ctx context.Context, userID int
 	if err := r.DB.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC").Find(&models).Error; err != nil {
 		return nil, err
 	}
+
 	return models, nil
 }
 
@@ -65,6 +66,7 @@ func (r *UserAIRepositoryImpl) GetCustomAIModelByID(ctx context.Context, id int6
 	if err := r.DB.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&model).Error; err != nil {
 		return nil, err
 	}
+
 	return &model, nil
 }
 
@@ -112,16 +114,19 @@ func (r *UserAIRepositoryImpl) GetUserCurrentModelID(ctx context.Context, userID
 	var profile UserAIProfile
 	result := r.DB.WithContext(ctx).Where("user_id = ?", userID).First(&profile)
 	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			// 用户AI配置不存在，返回0（默认模型）
 			err := r.EnsureUserAIProfile(ctx, userID)
 			if err != nil {
 				return 0, err
 			}
+
 			return 0, nil
 		}
+
 		return 0, result.Error
 	}
+
 	return profile.CurrentModelID, nil
 }
 
@@ -142,6 +147,7 @@ func (r *UserAIRepositoryImpl) CheckModelOwnership(ctx context.Context, modelID 
 	if err := r.DB.WithContext(ctx).Model(&model.CustomAIModel{}).Where("id = ? AND user_id = ?", modelID, userID).Count(&count).Error; err != nil {
 		return false, err
 	}
+
 	return count > 0, nil
 }
 
@@ -157,6 +163,7 @@ func (r *UserAIRepositoryImpl) EnsureUserAIProfile(ctx context.Context, userID i
 			UserID:         userID,
 			CurrentModelID: 0,
 		}
+
 		return r.DB.WithContext(ctx).Create(&profile).Error
 	}
 

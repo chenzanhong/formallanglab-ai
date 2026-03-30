@@ -52,6 +52,7 @@ func (m *OpenAIClientManager) GetClient(apiKey, baseURL string) (*openai.Client,
 	)
 
 	m.clients[cacheKey] = &client
+
 	return &client, nil
 }
 
@@ -61,6 +62,7 @@ func (m *OpenAIClientManager) GetDefaultClient(defaultAPIKey, defaultBaseURL str
 	if err != nil {
 		return nil, err
 	}
+
 	return client, nil
 }
 
@@ -88,7 +90,7 @@ func validateClient(ctx context.Context, apiKey, baseURL string) error {
 
 	_, err := client.Models.List(ctx)
 	if err != nil {
-		return fmt.Errorf("OpenAI客户端连接测试失败: %v", err)
+		return fmt.Errorf("OpenAI客户端连接测试失败: %w", err)
 	}
 
 	return nil

@@ -4,10 +4,6 @@ AI模块 OpenAI Go SDK版本不低于 v2.4.0
 package handler
 
 import (
-	"ai/internal/domain/dto"
-	"ai/internal/domain/model"
-	metrics "ai/internal/middleware/metrics"
-	"ai/internal/service"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,6 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/dto"
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
+	metrics "github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
+	"github.com/chenzanhong/formallanglab-ai/internal/service"
 	"github.com/chenzanhong/zlog"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -48,6 +48,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 		metrics.IncOperation("ai", "chat_sse", "failure: request body required")
 		zlog.Warnw("AI对话请求失败", "detail", "请求体不能为空")
 		c.JSON(http.StatusBadRequest, gin.H{"msg": "request body is required", "result": false})
+
 		return
 	}
 
@@ -78,12 +79,14 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 			metrics.IncOperation("ai", "chat_sse", "failure: check call limit error")
 			zlog.Warnw("检查AI调用限制失败", "detail", "无法检查用户调用限制")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "检查调用限制失败", "result": false})
+
 			return
 		}
 		if !canCall {
 			metrics.IncOperation("ai", "chat_sse", "failure: call limit exceeded")
 			zlog.Warnw("AI调用次数已达今日上限", "username", username)
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "AI调用次数已达今日上限，请明日再试或使用自定义模型", "result": false})
+
 			return
 		}
 	}
@@ -113,6 +116,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 				if err != nil {
 					metrics.IncOperation("ai", "chat_sse", "failure: get session error")
 					zlog.Warnw("获取会话失败", "detail", "无法获取或创建用户会话")
+
 					return
 				}
 
@@ -137,6 +141,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 				// 模拟延迟（更像真实 AI）
 				time.Sleep(100 * time.Millisecond)
 			}
+
 			return // 缓存命中，模拟流式响应完成，无需继续使用真实 ai 服务
 		}
 		// 缓存命中或获取模拟流，继续使用真实 ai 服务
@@ -156,6 +161,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 		metrics.IncOperation("ai", "chat_sse", "failure: service error")
 		zlog.Warnw("AI对话请求失败", "detail", "AI服务调用失败")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "result": false})
+
 		return
 	}
 
@@ -208,6 +214,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 		zlog.Errorw("AI流式传输失败", "error", err, "question", req.Question)
 		c.Writer.Write([]byte("\n[ERROR: 流式传输中断，请重试]"))
 		c.Writer.Flush()
+
 		return
 	}
 
@@ -244,6 +251,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 		metrics.IncOperation("ai", "chat_ws", "failure: upgrade required")
 		zlog.Warnw("AI对话请求失败", "detail", "升级为WebSocket协议失败")
 		c.JSON(http.StatusBadRequest, gin.H{"msg": "upgrade required", "result": false})
+
 		return
 	}
 
@@ -277,6 +285,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 		defer writeMu.Unlock()
 		// 设置写超时：10分钟内必须回复，否则断开
 		conn.SetWriteDeadline(time.Now().Add(10 * time.Minute))
+
 		return conn.WriteJSON(msg)
 	}
 
@@ -325,6 +334,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				zlog.Warnw("WebSocket read message failed", "error", err)
 			}
+
 			return // 客户端断开，退出循环
 		}
 
@@ -360,12 +370,14 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 					metrics.IncOperation("ai", "chat_ws", "failure: check call limit error")
 					zlog.Warnw("检查AI调用限制失败", "detail", "无法检查用户调用限制")
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "检查调用限制失败"})
+
 					continue
 				}
 				if !canCall {
 					metrics.IncOperation("ai", "chat_ws", "failure: call limit exceeded")
 					zlog.Warnw("AI调用次数已达今日上限", "username", username)
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "AI调用次数已达今日上限，请明日再试或使用自定义模型"})
+
 					continue
 				}
 			}
@@ -392,6 +404,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 						if err != nil {
 							metrics.IncOperation("ai", "chat_ws", "failure: get session error")
 							zlog.Errorw("Get session failed", "error", err)
+
 							return
 						}
 						session.AddTurns(req.Question, qaCacheAnswer)
@@ -431,6 +444,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 						}
 						fmt.Println("MockAI 回答：", qaCacheAnswer)
 					}()
+
 					continue
 				}
 			}
@@ -445,6 +459,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 					metrics.IncOperation("ai", "chat_ws", "failure: get session error")
 					zlog.Errorw("Get session failed", "error", err)
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: err.Error()})
+
 					return
 				}
 				stream, err := h.aiService.StreamChat(ctx, session, &req, modelID, userID.(int64))
@@ -452,6 +467,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 					metrics.IncOperation("ai", "chat_ws", "failure: stream chat error")
 					zlog.Errorw("Stream chat failed", "error", err)
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: err.Error()})
+
 					return
 				}
 
@@ -536,6 +552,7 @@ func (h *AIHandler) GetAIConfig(c *gin.Context) {
 	if err != nil {
 		zlog.Warnw("获取AI配置失败", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取AI配置失败", "result": false})
+
 		return
 	}
 
@@ -566,6 +583,7 @@ func (h *AIHandler) AddCustomAIModel(c *gin.Context) {
 			"detail": err.Error(),
 			"result": false,
 		})
+
 		return
 	}
 
@@ -574,6 +592,7 @@ func (h *AIHandler) AddCustomAIModel(c *gin.Context) {
 	if err != nil {
 		zlog.Warnw("添加自定义AI模型失败", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "添加自定义AI模型失败：" + err.Error(), "result": false})
+
 		return
 	}
 
@@ -597,6 +616,7 @@ func (h *AIHandler) GetCustomAIModels(c *gin.Context) {
 	if err != nil {
 		zlog.Warnw("获取自定义AI模型列表失败", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取自定义AI模型列表失败", "result": false})
+
 		return
 	}
 
@@ -651,6 +671,7 @@ func (h *AIHandler) UpdateCustomAIModel(c *gin.Context) {
 			"detail": err.Error(),
 			"result": false,
 		})
+
 		return
 	}
 
@@ -659,6 +680,7 @@ func (h *AIHandler) UpdateCustomAIModel(c *gin.Context) {
 	if err != nil {
 		zlog.Warnw("更新自定义AI模型失败", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新自定义AI模型失败", "result": false})
+
 		return
 	}
 
@@ -689,6 +711,7 @@ func (h *AIHandler) DeleteCustomAIModel(c *gin.Context) {
 	if err := h.aiService.DeleteCustomAIModel(c.Request.Context(), userID.(int64), modelID); err != nil {
 		zlog.Warnw("删除自定义AI模型失败", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除自定义AI模型失败", "result": false})
+
 		return
 	}
 
@@ -718,6 +741,7 @@ func (h *AIHandler) SwitchModel(c *gin.Context) {
 	if err := h.aiService.UpdateUserCurrentModel(c.Request.Context(), userID.(int64), req.ModelID); err != nil {
 		zlog.Warnw("切换模型失败", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "切换模型失败", "result": false})
+
 		return
 	}
 

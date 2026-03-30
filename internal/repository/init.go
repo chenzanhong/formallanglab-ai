@@ -25,7 +25,7 @@ func InitRedis() (*redis.Client, error) {
 		var err error
 		db, err = strconv.Atoi(dbStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid REDIS_DB value: %v", err)
+			return nil, fmt.Errorf("invalid REDIS_DB value: %w", err)
 		}
 	}
 
@@ -49,10 +49,11 @@ func InitRedis() (*redis.Client, error) {
 	ctx := context.Background()
 	_, err := client.Ping(ctx).Result()
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Redis: %v", err)
+		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 
 	zlog.Info("Redis connected successfully")
+
 	return client, nil
 }
 
@@ -68,7 +69,7 @@ func InitDB() (*gorm.DB, error) {
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %v", err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	ctx := context.Background()
@@ -77,6 +78,7 @@ func InitDB() (*gorm.DB, error) {
 	}
 
 	zlog.Info("Database connected successfully")
+
 	return db, nil
 }
 

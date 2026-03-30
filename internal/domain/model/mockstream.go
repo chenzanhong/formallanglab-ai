@@ -29,6 +29,7 @@ func splitIntoChunks(str string, chunkSize int) []string {
 		}
 		chunks = append(chunks, string(runes[i:end]))
 	}
+
 	return chunks
 }
 
@@ -41,6 +42,7 @@ func (m *MockStream) Current() string {
 		return ""
 	}
 	m.index++
+
 	return m.chunks[m.index-1]
 }
 

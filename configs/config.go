@@ -1,8 +1,6 @@
 package configs
 
 import (
-	// "ai/internal/middleware"
-
 	"encoding/json"
 	"fmt"
 	"log"
@@ -127,6 +125,7 @@ func ApplyEnvToConfig(cfg *Config) {
 		if v := os.Getenv(key); v != "" {
 			return v
 		}
+
 		return fallback
 	}
 	getEnvInt := func(key string, fallback int) int {
@@ -135,6 +134,7 @@ func ApplyEnvToConfig(cfg *Config) {
 				return i
 			}
 		}
+
 		return fallback
 	}
 	getEnvBool := func(key string, fallback bool) bool {
@@ -143,6 +143,7 @@ func ApplyEnvToConfig(cfg *Config) {
 				return b
 			}
 		}
+
 		return fallback
 	}
 
@@ -219,6 +220,7 @@ func parseLogFieldsFromEnv() map[string]string {
 		log.Printf("Invalid LOG_FIELDS, ignoring: %v", err)
 		return nil
 	}
+
 	return fields
 }
 

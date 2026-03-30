@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"ai/internal/domain/model"
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	_ "github.com/lib/pq" // PostgreSQL驱动
 	"gorm.io/gorm"
 )
@@ -83,6 +83,7 @@ func (l *QACacheLoader) LoadCache(cache *model.QACache, dirPath string) error {
 				cache.Set(alias, answer)
 			}
 		}
+
 		return nil
 	})
 }
@@ -131,6 +132,7 @@ func (l *QACacheLoader) LoadCacheFile(cache *model.QACache, filepath string) err
 			cache.Set(alias, answer)
 		}
 	}
+
 	return nil
 }
 
@@ -212,6 +214,7 @@ func (r *QACacheRepository) SaveCacheToDB(items []model.QACacheItem) error {
 		if err := tx.Create(&items).Error; err != nil {
 			return fmt.Errorf("插入数据失败: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -223,5 +226,6 @@ func (r *QACacheRepository) GetAllItems() ([]model.QACacheItem, error) {
 	if err := r.db.Find(&items).Error; err != nil {
 		return nil, fmt.Errorf("查询数据库失败: %w", err)
 	}
+
 	return items, nil
 }
