@@ -1,0 +1,49 @@
+server:
+  port: 8083
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 1
+  max_conn: 10
+  max_idle_conn: 5
+
+pg:
+  host: localhost
+  port: 5432
+  name: formallanglab
+  user: postgres
+  password: password
+
+rate:
+  user_rate: 100
+  user_burst: 200
+
+jwt:
+  key: "your-jwt-secret-key"
+
+ai:
+  dashscope_api_key: "your-dashscope-api-key"
+  dashscope_base_url: "https://dashscope.aliyuncs.com/api/v1"
+  dashscope_model: "qwen-turbo"
+  session_expire_seconds: 3600
+  max_session_turns: 50
+  max_ctx_token: 4096
+  crypto_key: "your-crypto-key"
+
+zlog:
+  level: info
+  output: console
+  format: json
+  file_path: logs/app.log
+  max_size: 100
+  max_backups: 5
+  max_age: 30
+  compress: true
+  sampling: false
+
+qa_cache:
+  path: "./qa_cache"
+  use_db: true
+  load_from_file: true
