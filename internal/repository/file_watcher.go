@@ -17,9 +17,8 @@ type QACacheWatcher struct {
 	watchedDir    string
 	qaCache       model.QACache
 	qaCacheLoader *QACacheLoader
-	// qaCacheService *service.QACacheService
-	stopChan chan struct{}
-	wg       sync.WaitGroup
+	stopChan      chan struct{}
+	wg            sync.WaitGroup
 }
 
 // NewQACacheWatcher 创建新的文件系统监控器
@@ -34,8 +33,7 @@ func NewQACacheWatcher(watchedDir string, qaCache model.QACache, qaCacheLoader *
 		watchedDir:    watchedDir,
 		qaCache:       qaCache,
 		qaCacheLoader: qaCacheLoader,
-		// qaCacheService: qaCacheService,
-		stopChan: make(chan struct{}),
+		stopChan:      make(chan struct{}),
 	}, nil
 }
 
