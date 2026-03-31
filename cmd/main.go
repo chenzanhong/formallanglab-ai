@@ -76,7 +76,7 @@ func main() {
 	// 8. 初始化AI仓库
 	aiRepo := repository.NewAIRepository(redisClient)
 
-	// 7. 初始化QACache
+	// 9. 初始化QACache
 	qaCache := model.NewQACache()
 	qaCacheLoader := repository.NewQACacheLoader()
 	go func() {
@@ -88,10 +88,10 @@ func main() {
 		}
 	}()
 
-	// 8. 初始化OpenAI客户端管理器
+	// 10. 初始化OpenAI客户端管理器
 	clientManager := service.NewOpenAIClientManager()
 
-	// 9. 预先初始化默认AI客户端
+	// 11. 预先初始化默认AI客户端
 	apiKey := os.Getenv("DASHSCOPE_API_KEY")
 	if apiKey == "" {
 		zlog.Fatalf("DASHSCOPE_API_KEY is required")
@@ -107,7 +107,7 @@ func main() {
 	}
 	zlog.Infow("Default OpenAI client initialized", "baseURL", baseURL)
 
-	// 10. 创建AI服务
+	// 12. 创建AI服务
 	aiService := service.NewAIService(clientManager, aiRepo, userAIRepo, qaCache, config.AI)
 	// 启动pprof http服务
 	go func() {

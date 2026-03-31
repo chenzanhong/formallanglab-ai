@@ -1,5 +1,4 @@
 # 第一阶段：构建阶段
-# 第一阶段：构建阶段
 FROM crpi-tcnuencv1iecgx03.cn-hangzhou.personal.cr.aliyuncs.com/chenzh2004/golang:1.24-alpine AS builder
 
 # 设置工作目录
@@ -59,6 +58,9 @@ COPY --from=builder /app/ai-server /app/
 # 复制配置文件
 COPY configs/config.yaml /app/configs/
 
+# 复制迁移文件
+COPY migrations/ /app/migrations/
+
 # 复制qacache资源
 COPY asset/ /app/asset/
 
@@ -67,6 +69,3 @@ EXPOSE 8082 6062 4042
 
 # 运行应用（使用exec形式的CMD以确保信号能正确传递）
 CMD ["/app/ai-server"]
-
-# docker build -t crpi-tcnuencv1iecgx03.cn-hangzhou.personal.cr.aliyuncs.com/chenzh2004/formallanglab-ai .
-# docker push crpi-tcnuencv1iecgx03.cn-hangzhou.personal.cr.aliyuncs.com/chenzh2004/formallanglab-ai
