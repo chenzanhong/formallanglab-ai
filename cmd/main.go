@@ -60,19 +60,6 @@ func main() {
 	// 7. 初始化用户仓库
 	userAIRepo := repository.NewUserAIRepository(db, redisClient)
 
-	// // 8. 初始化OpenAI客户端
-	// apiKey := os.Getenv("DASHSCOPE_API_KEY")
-	// if apiKey == "" {
-	// 	zlog.Fatalf("DASHSCOPE_API_KEY is required")
-	// }
-	// baseURL := os.Getenv("DASHSCOPE_BASE_URL")
-	// if baseURL == "" {
-	// 	zlog.Fatalf("DASHSCOPE_BASE_URL is required")
-	// }
-	// openaiClient, err := service.NewOpenAIClient(apiKey, baseURL)
-	// if err != nil {
-	// 	log.Fatalf("Failed to create OpenAI client: %v", err)
-	// }
 	// 8. 初始化AI仓库
 	aiRepo := repository.NewAIRepository(redisClient)
 

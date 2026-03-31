@@ -43,10 +43,10 @@ type AIService interface {
 	SaveSession(ctx context.Context, username string, session *model.AISession) error
 	GetSessionExpireSeconds() int
 	GetMaxSessionTurns() int
-	CheckAICallLimit(ctx context.Context, userID string) (bool, error)                            // 检查是否超出调用限制
-	IncrementAICallCount(ctx context.Context, userID string) error                                // 增加调用计数
-	GetCustomAIModel(ctx context.Context, modelID int64, userID int64) (map[string]string, error) // 获取自定义AI模型配置
-	// 自定义AI模型相关方法
+	CheckAICallLimit(ctx context.Context, userID string) (bool, error) // 检查是否超出调用限制
+	IncrementAICallCount(ctx context.Context, userID string) error     // 增加调用计数
+
+	GetCustomAIModel(ctx context.Context, modelID int64, userID int64) (map[string]string, error)
 	GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error)
 	ValidateClient(ctx context.Context, apiKey, baseURL string) error
 	AddCustomAIModel(ctx context.Context, userID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error)
@@ -60,9 +60,9 @@ type AIService interface {
 type AIServiceImpl struct {
 	clientManager *OpenAIClientManager
 	repo          repository.AIRepository
-	qaCache       *model.QACache // 显式依赖
+	qaCache       *model.QACache
 	aiCfg         configs.AIConfig
-	userAIRepo    repository.UserAIRepository // 用户仓库，用于获取自定义AI模型配置
+	userAIRepo    repository.UserAIRepository
 }
 
 func NewAIService(
