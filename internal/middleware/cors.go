@@ -17,6 +17,7 @@ func CORSMiddleware() gin.HandlerFunc {
 		"http://localhost:3000",
 	}
 
+	config.AllowCredentials = true
 	config.AllowMethods = []string{"*"}
 	config.AllowHeaders = []string{"*"}
 
