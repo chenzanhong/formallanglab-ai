@@ -132,6 +132,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 				if err != nil {
 					metrics.IncOperation("ai", "chat_sse", "failure: get session error")
 					zlog.Warnw("获取会话失败", "detail", "无法获取或创建用户会话")
+
 					return
 				}
 
@@ -218,6 +219,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 			zlog.Warnw("SSE stream timeout")
 			c.Writer.Write([]byte("\n[ERROR: 流式传输超时，请重试]"))
 			c.Writer.Flush()
+
 			return
 		}
 	}
@@ -228,6 +230,7 @@ StreamEnd:
 		zlog.Errorw("AI 流式传输失败", "error", err, "question", req.Question)
 		c.Writer.Write([]byte("\n[ERROR: 流式传输中断，请重试]"))
 		c.Writer.Flush()
+
 		return
 	}
 
@@ -285,6 +288,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 		writeMu.Lock()
 		defer writeMu.Unlock()
 		conn.SetWriteDeadline(time.Now().Add(wsMaxWriteTimeout))
+
 		return conn.WriteJSON(msg)
 	}
 
@@ -362,6 +366,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 			if err := json.Unmarshal([]byte(incoming.Data), &req); err != nil {
 				mu.Unlock()
 				safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "invalid JSON format"})
+
 				continue
 			}
 
@@ -374,6 +379,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 					zlog.Warnw("检查 AI 调用限制失败", "detail", "无法检查用户调用限制")
 					mu.Unlock()
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "检查调用限制失败"})
+
 					continue
 				}
 				if !canCall {
@@ -381,6 +387,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 					zlog.Warnw("AI 调用次数已达今日上限", "username", username)
 					mu.Unlock()
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "AI 调用次数已达今日上限，请明日再试或使用自定义模型"})
+
 					continue
 				}
 			}
@@ -403,6 +410,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 						if err != nil {
 							metrics.IncOperation("ai", "chat_ws", "failure: get session error")
 							zlog.Errorw("Get session failed", "error", err)
+
 							return
 						}
 						session.AddTurns(req.Question, qaCacheAnswer)
@@ -458,6 +466,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 					metrics.IncOperation("ai", "chat_ws", "failure: get session error")
 					zlog.Errorw("Get session failed", "error", err)
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: err.Error()})
+
 					return
 				}
 				stream, err := h.aiService.StreamChat(streamCtx, session, &req, modelID, userID)
@@ -465,6 +474,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 					metrics.IncOperation("ai", "chat_ws", "failure: stream chat error")
 					zlog.Errorw("Stream chat failed", "error", err)
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: err.Error()})
+
 					return
 				}
 
