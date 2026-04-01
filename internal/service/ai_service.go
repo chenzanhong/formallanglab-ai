@@ -43,8 +43,8 @@ type AIService interface {
 	SaveSession(ctx context.Context, username string, session *model.AISession) error
 	GetSessionExpireSeconds() int
 	GetMaxSessionTurns() int
-	CheckAICallLimit(ctx context.Context, userID string) (bool, error) // 检查是否超出调用限制
-	IncrementAICallCount(ctx context.Context, userID string) error     // 增加调用计数
+	CheckAICallLimit(ctx context.Context, userID int64) (bool, error) // 检查是否超出调用限制
+	IncrementAICallCount(ctx context.Context, userID int64) error     // 增加调用计数
 
 	GetCustomAIModel(ctx context.Context, modelID int64, userID int64) (map[string]string, error)
 	GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error)
@@ -257,18 +257,19 @@ func (s *AIServiceImpl) GetMaxSessionTurns() int {
 }
 
 // CheckAICallLimit 检查用户是否超出AI调用限制
-func (s *AIServiceImpl) CheckAICallLimit(ctx context.Context, userID string) (bool, error) {
+func (s *AIServiceImpl) CheckAICallLimit(ctx context.Context, userID int64) (bool, error) {
 	// 从repository获取调用次数
 	count, err := s.repo.GetAICallCount(ctx, userID)
 	if err != nil {
 		return false, err
 	}
+
 	// 检查是否超过限制（10次）
 	return count < 10, nil
 }
 
 // IncrementAICallCount 增加用户AI调用计数
-func (s *AIServiceImpl) IncrementAICallCount(ctx context.Context, userID string) error {
+func (s *AIServiceImpl) IncrementAICallCount(ctx context.Context, userID int64) error {
 	return s.repo.IncrementAICallCount(ctx, userID)
 }
 
@@ -446,7 +447,7 @@ func (s *AIServiceImpl) GetAIConfig(ctx context.Context, userID int64) (*dto.AIC
 
 	// 获取默认模型剩余次数
 	remainingQuota := 10
-	count, err := s.repo.GetAICallCount(ctx, fmt.Sprintf("%d", userID))
+	count, err := s.repo.GetAICallCount(ctx, userID)
 	if err == nil {
 		remainingQuota = 10 - count
 		if remainingQuota < 0 {

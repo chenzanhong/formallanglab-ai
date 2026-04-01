@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/chenzanhong/formallanglab-ai/internal/service"
 	"github.com/chenzanhong/goutil/jwtx"
 	"github.com/chenzanhong/zlog"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func init() {
@@ -29,7 +31,7 @@ func main() {
 		log.Fatalf("加载配置失败：%v", err.Error())
 	}
 
-	// 2. 设置环境变量，确保未有的环境变量有值
+	// 2. 设置环境变量
 	cf.SyncConfigToEnv(config)
 
 	// 3. 设置 JWT 密钥
@@ -63,7 +65,7 @@ func main() {
 	// 8. 初始化AI仓库
 	aiRepo := repository.NewAIRepository(redisClient)
 
-	// 9. 初始化QACache
+	// 9. 初始化QACache（异步加载，失败不影响服务启动）
 	qaCache := model.NewQACache()
 	qaCacheLoader := repository.NewQACacheLoader()
 	go func() {
@@ -78,7 +80,7 @@ func main() {
 	// 10. 初始化OpenAI客户端管理器
 	clientManager := service.NewOpenAIClientManager()
 
-	// 11. 预先初始化默认AI客户端
+	// 11. 预先初始化默认AI客户端（启动时验证配置是否正确）
 	apiKey := os.Getenv("DASHSCOPE_API_KEY")
 	if apiKey == "" {
 		zlog.Fatalf("DASHSCOPE_API_KEY is required")
@@ -96,11 +98,26 @@ func main() {
 
 	// 12. 创建AI服务
 	aiService := service.NewAIService(clientManager, aiRepo, userAIRepo, qaCache, config.AI)
-	// 启动pprof http服务
+
+	// 13. 启动pprof http服务（通过 PPROF_PORT 环境变量控制，默认为 6060）
 	go func() {
 		zlog.Info("Starting pprof on localhost:" + os.Getenv("PPROF_PORT"))
 		http.ListenAndServe("localhost:"+os.Getenv("PPROF_PORT"), nil)
 	}()
+
+	// 14. 启动独立的 metrics 服务（通过 METRICS_PORT 环境变量控制）
+	go func() {
+		metricsPort := os.Getenv("METRICS_PORT")
+		if metricsPort != "" && metricsPort != "0" {
+			zlog.Infow("Starting metrics server on:", metricsPort)
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", promhttp.Handler())
+			if err := http.ListenAndServe(fmt.Sprintf(":%s", metricsPort), mux); err != nil {
+				zlog.Errorf("Metrics server error: %v", err)
+			}
+		}
+	}()
+
 	server := server.NewServer(aiService, redisClient, config.Server.Port)
 	server.Start()
 }

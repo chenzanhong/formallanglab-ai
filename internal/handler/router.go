@@ -29,7 +29,6 @@ func SetupRouter(aiHandler *AIHandler) *gin.Engine {
 		})
 	})
 	router.GET("/gdesign/ai/metrics", mtr.MetricsHandler())
-
 	// WebSocket聊天接口，不经过JWT中间件，直接通过URL参数 token 验证
 	router.GET("/gdesign/ai/ws", middleware.AuthWebsocket(), aiHandler.AIChatWS)
 

@@ -14,8 +14,8 @@ import (
 type AIRepository interface {
 	SaveSession(ctx context.Context, username string, session *model.AISession, sessionExpireSeconds int) error
 	GetSession(ctx context.Context, username string) (*model.AISession, error)
-	GetAICallCount(ctx context.Context, userID string) (int, error)
-	IncrementAICallCount(ctx context.Context, userID string) error
+	GetAICallCount(ctx context.Context, userID int64) (int, error)
+	IncrementAICallCount(ctx context.Context, userID int64) error
 	ResetAICallCount(ctx context.Context, userID string) error
 	GetCustomAIModelFromRedis(ctx context.Context, modelID int64, userID int64) (map[string]string, error)
 	SaveCustomAIModelToRedis(ctx context.Context, modelID int64, userID int64, modelConfig map[string]string) error
@@ -61,10 +61,13 @@ func (r *AIRepositoryImpl) GetSession(ctx context.Context, username string) (*mo
 	return &session, nil
 }
 
+func getAICallCountKey(userID int64) string {
+	return fmt.Sprintf("ai-%s-%d-num", time.Now().Format("20060102"), userID)
+}
+
 // GetAICallCount 获取用户AI调用次数
-func (r *AIRepositoryImpl) GetAICallCount(ctx context.Context, userID string) (int, error) {
-	date := time.Now().Format("20060102")
-	key := "ai-" + date + "-" + userID + "-num"
+func (r *AIRepositoryImpl) GetAICallCount(ctx context.Context, userID int64) (int, error) {
+	key := getAICallCountKey(userID)
 	count, err := r.redis.Get(ctx, key).Int()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
@@ -79,9 +82,8 @@ func (r *AIRepositoryImpl) GetAICallCount(ctx context.Context, userID string) (i
 }
 
 // IncrementAICallCount 增加用户AI调用次数
-func (r *AIRepositoryImpl) IncrementAICallCount(ctx context.Context, userID string) error {
-	date := time.Now().Format("20060102")
-	key := "ai-" + date + "-" + userID + "-num"
+func (r *AIRepositoryImpl) IncrementAICallCount(ctx context.Context, userID int64) error {
+	key := getAICallCountKey(userID)
 	// 增加计数，设置24小时过期
 	err := r.redis.Incr(ctx, key).Err()
 	if err != nil {

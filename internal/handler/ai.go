@@ -60,8 +60,8 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 	}
 
 	// 获取用户ID
-	userID, exists := c.Get("user_id")
-	if !exists {
+	userID := c.GetInt64("user_id")
+	if userID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
 		return
 	}
@@ -74,7 +74,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 
 	// 检查AI调用限制（仅默认模型）
 	if modelID == 0 {
-		canCall, err := h.aiService.CheckAICallLimit(c.Request.Context(), username)
+		canCall, err := h.aiService.CheckAICallLimit(c.Request.Context(), userID)
 		if err != nil {
 			metrics.IncOperation("ai", "chat_sse", "failure: check call limit error")
 			zlog.Warnw("检查AI调用限制失败", "detail", "无法检查用户调用限制")
@@ -88,6 +88,11 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "AI调用次数已达今日上限，请明日再试或使用自定义模型", "result": false})
 
 			return
+		}
+		// 增加AI调用计数（仅默认模型）
+		if err := h.aiService.IncrementAICallCount(c.Request.Context(), userID); err != nil {
+			metrics.IncOperation("ai", "chat_sse", "failure: increment call count error")
+			zlog.Warnw("增加AI调用计数失败", "detail", "无法更新用户调用计数")
 		}
 	}
 
@@ -156,7 +161,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 		zlog.Warnw("获取会话失败", "detail", "无法获取或创建用户会话")
 		// 记录错误，但是不终止，允许不借助对话历史
 	}
-	stream, err := h.aiService.StreamChat(c.Request.Context(), session, &req, modelID, userID.(int64))
+	stream, err := h.aiService.StreamChat(c.Request.Context(), session, &req, modelID, userID)
 	if err != nil {
 		metrics.IncOperation("ai", "chat_sse", "failure: service error")
 		zlog.Warnw("AI对话请求失败", "detail", "AI服务调用失败")
@@ -226,13 +231,6 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 			metrics.IncOperation("ai", "chat_sse", "failure: save session error")
 			zlog.Warnw("AI会话保存失败", "detail", "无法保存用户会话信息")
 		}
-		// 增加AI调用计数（仅默认模型）
-		if modelID == 0 {
-			if err := h.aiService.IncrementAICallCount(ctx, username); err != nil {
-				metrics.IncOperation("ai", "chat_sse", "failure: increment call count error")
-				zlog.Warnw("增加AI调用计数失败", "detail", "无法更新用户调用计数")
-			}
-		}
 	}()
 
 	metrics.IncOperation("ai", "chat_sse", "success")
@@ -262,8 +260,8 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 	}
 
 	// 获取用户ID
-	userID, exists := c.Get("user_id")
-	if !exists {
+	userID := c.GetInt64("user_id")
+	if userID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
 		return
 	}
@@ -365,7 +363,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 
 			// 检查AI调用限制（仅默认模型）
 			if modelID == 0 {
-				canCall, err := h.aiService.CheckAICallLimit(c.Request.Context(), username)
+				canCall, err := h.aiService.CheckAICallLimit(c.Request.Context(), userID)
 				if err != nil {
 					metrics.IncOperation("ai", "chat_ws", "failure: check call limit error")
 					zlog.Warnw("检查AI调用限制失败", "detail", "无法检查用户调用限制")
@@ -454,6 +452,15 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 			// 异步启动 AI 流
 			go func() {
 				defer close(doneChan) // 通知主 goroutine: 我已完成
+
+				// 增加AI调用计数（仅默认模型）
+				if modelID == 0 {
+					if err := h.aiService.IncrementAICallCount(context.Background(), userID); err != nil {
+						metrics.IncOperation("ai", "chat_ws", "failure: increment call count error")
+						zlog.Warnw("增加AI调用计数失败", "detail", "无法更新用户调用计数")
+					}
+				}
+
 				session, err := h.aiService.GetSession(ctx, username)
 				if err != nil {
 					metrics.IncOperation("ai", "chat_ws", "failure: get session error")
@@ -462,7 +469,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 
 					return
 				}
-				stream, err := h.aiService.StreamChat(ctx, session, &req, modelID, userID.(int64))
+				stream, err := h.aiService.StreamChat(ctx, session, &req, modelID, userID)
 				if err != nil {
 					metrics.IncOperation("ai", "chat_ws", "failure: stream chat error")
 					zlog.Errorw("Stream chat failed", "error", err)
@@ -509,13 +516,6 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 					if saveErr := h.aiService.SaveSession(context.Background(), username, session); saveErr != nil {
 						metrics.IncOperation("ai", "chat_ws", "failure: save session error")
 						zlog.Warnw("AI会话保存失败", "detail", "无法保存用户会话信息")
-					}
-					// 增加AI调用计数（仅默认模型）
-					if modelID == 0 {
-						if err := h.aiService.IncrementAICallCount(context.Background(), username); err != nil {
-							metrics.IncOperation("ai", "chat_ws", "failure: increment call count error")
-							zlog.Warnw("增加AI调用计数失败", "detail", "无法更新用户调用计数")
-						}
 					}
 				}()
 			}()
