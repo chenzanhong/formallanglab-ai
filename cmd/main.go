@@ -111,7 +111,7 @@ func main() {
 		if metricsPort != "" && metricsPort != "0" {
 			zlog.Infow("Starting metrics server on:", metricsPort)
 			mux := http.NewServeMux()
-			mux.Handle("/metrics", promhttp.Handler())
+			mux.Handle("/gdesign/ai/metrics", promhttp.Handler())
 			if err := http.ListenAndServe(fmt.Sprintf(":%s", metricsPort), mux); err != nil {
 				zlog.Errorf("Metrics server error: %v", err)
 			}
