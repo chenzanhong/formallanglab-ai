@@ -23,7 +23,7 @@ import (
 
 const (
 	defaultModelID     = int64(0)
-	streamFlushTimeout = 10 * time.Second
+	streamFlushTimeout = 1 * time.Second
 	mockStreamDelay    = 100 * time.Millisecond
 
 	wsHeartbeatInterval = 30 * time.Second
@@ -187,7 +187,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 	// 用于缓冲待发送的内容（提升性能）
 	var buffer strings.Builder
 
-	ticker := time.NewTicker(64 * time.Millisecond)
+	ticker := time.NewTicker(streamFlushTimeout)
 	defer ticker.Stop()
 
 	done := make(chan bool)
@@ -228,7 +228,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 
 	if err := stream.Err(); err != nil {
 		metrics.IncOperation("ai", "chat_sse", "failure: stream error")
-		zlog.Errorw("AI流式传输失败", "error", err, "question", req.Question)
+		zlog.Errorw("AI 流式传输失败", "error", err, "question", req.Question)
 		c.Writer.Write([]byte("\n[ERROR: 流式传输中断，请重试]"))
 		c.Writer.Flush()
 
