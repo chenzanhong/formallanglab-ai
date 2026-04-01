@@ -33,6 +33,7 @@ const (
 注意！对于明显超出形式语言与自动机范围的问题（如编程、其他课程内容等），请礼貌回应，例如：
 > “抱歉，这个问题超出了本课程《形式语言与自动机》的范围，我无法回答该问题。”
 `
+	maxAICallPerDay = 10
 )
 
 type AIService interface {
@@ -256,16 +257,14 @@ func (s *AIServiceImpl) GetMaxSessionTurns() int {
 	return s.aiCfg.MaxSessionTurns
 }
 
-// CheckAICallLimit 检查用户是否超出AI调用限制
+// CheckAICallLimit 检查用户是否超出 AI 调用限制
 func (s *AIServiceImpl) CheckAICallLimit(ctx context.Context, userID int64) (bool, error) {
-	// 从repository获取调用次数
 	count, err := s.repo.GetAICallCount(ctx, userID)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to get AI call count: %w", err)
 	}
 
-	// 检查是否超过限制（10次）
-	return count < 10, nil
+	return count < maxAICallPerDay, nil
 }
 
 // IncrementAICallCount 增加用户AI调用计数

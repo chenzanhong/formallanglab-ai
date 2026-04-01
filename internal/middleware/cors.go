@@ -5,7 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// CORSMiddleware 是一个中间件，用于配置CORS
+// CORSMiddleware 是一个中间件，用于配置 CORS
 func CORSMiddleware() gin.HandlerFunc {
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{
@@ -17,8 +17,6 @@ func CORSMiddleware() gin.HandlerFunc {
 		"http://localhost:3000",
 	}
 
-	// config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	// config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 	config.AllowMethods = []string{"*"}
 	config.AllowHeaders = []string{"*"}
 
