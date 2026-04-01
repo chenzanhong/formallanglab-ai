@@ -21,9 +21,28 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	defaultModelID     = int64(0)
+	streamFlushTimeout = 10 * time.Second
+	mockStreamDelay    = 100 * time.Millisecond
+
+	wsHeartbeatInterval = 30 * time.Second
+	wsReadTimeout       = 5 * time.Minute
+	wsMaxWriteTimeout   = 10 * time.Minute
+)
+
 type AIHandler struct {
 	aiService service.AIService
 	upgrader  websocket.Upgrader
+}
+
+var allowedOrigins = map[string]bool{
+	"https://caohaitong.xyz": true,
+	"http://caohaitong.xyz":  true,
+	"http://113.44.170.52":   true,
+	"https://113.44.170.52":  true,
+	"http://localhost:5173":  true,
+	"http://localhost:3000":  true,
 }
 
 func NewAIHandler(aiService service.AIService) *AIHandler {
@@ -31,7 +50,8 @@ func NewAIHandler(aiService service.AIService) *AIHandler {
 		aiService: aiService,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				return true // 允许所有来源（生产环境应限制，从配置文件获取）
+				origin := r.Header.Get("Origin")
+				return allowedOrigins[origin]
 			},
 		},
 	}
@@ -46,82 +66,72 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 	var req dto.AIChatRequest
 	if err := c.BindJSON(&req); err != nil {
 		metrics.IncOperation("ai", "chat_sse", "failure: request body required")
-		zlog.Warnw("AI对话请求失败", "detail", "请求体不能为空")
+		zlog.Warnw("AI 对话请求失败", "detail", "请求体不能为空")
 		c.JSON(http.StatusBadRequest, gin.H{"msg": "request body is required", "result": false})
 
 		return
 	}
 
-	// JWT 中间件中Set的username
 	username := c.GetString("username")
 	if username == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少有效的token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少有效的 token"})
 		return
 	}
 
-	// 获取用户ID
 	userID := c.GetInt64("user_id")
 	if userID == 0 {
-		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户 ID"})
 		return
 	}
 
-	// 获取模型ID，默认为0（使用默认模型）
-	modelID := int64(0)
+	modelID := defaultModelID
 	if modelIDStr := c.Query("model_id"); modelIDStr != "" {
-		fmt.Sscanf(modelIDStr, "%d", &modelID)
+		if _, err := fmt.Sscanf(modelIDStr, "%d", &modelID); err != nil {
+			modelID = defaultModelID
+		}
 	}
 
-	// 检查AI调用限制（仅默认模型）
-	if modelID == 0 {
+	if modelID == defaultModelID {
 		canCall, err := h.aiService.CheckAICallLimit(c.Request.Context(), userID)
 		if err != nil {
 			metrics.IncOperation("ai", "chat_sse", "failure: check call limit error")
-			zlog.Warnw("检查AI调用限制失败", "detail", "无法检查用户调用限制")
+			zlog.Warnw("检查 AI 调用限制失败", "detail", "无法检查用户调用限制")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "检查调用限制失败", "result": false})
 
 			return
 		}
 		if !canCall {
 			metrics.IncOperation("ai", "chat_sse", "failure: call limit exceeded")
-			zlog.Warnw("AI调用次数已达今日上限", "username", username)
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "AI调用次数已达今日上限，请明日再试或使用自定义模型", "result": false})
+			zlog.Warnw("AI 调用次数已达今日上限", "username", username)
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "AI 调用次数已达今日上限，请明日再试或使用自定义模型", "result": false})
 
 			return
 		}
-		// 增加AI调用计数（仅默认模型）
 		if err := h.aiService.IncrementAICallCount(c.Request.Context(), userID); err != nil {
 			metrics.IncOperation("ai", "chat_sse", "failure: increment call count error")
-			zlog.Warnw("增加AI调用计数失败", "detail", "无法更新用户调用计数")
+			zlog.Warnw("增加 AI 调用计数失败", "detail", "无法更新用户调用计数")
 		}
 	}
 
-	// 设置SSE响应头
 	c.Header("Content-Type", "text/event-stream; charset=utf-8")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("X-Accel-Buffering", "no")
 
-	question := req.Question
-	cachedAnswer := h.aiService.CheckCache(question)
-
-	// 检查缓存
+	cachedAnswer := h.aiService.CheckCache(req.Question)
 	if cachedAnswer != "" {
 		metrics.IncOperation("ai", "cache_hit", "success")
-		zlog.Infow("AI对话(SSE)缓存命中", "question", req.Question)
+		zlog.Infow("AI 对话 (SSE) 缓存命中", "question", req.Question)
 
-		// 模拟流式响应
 		mockStream, err := h.aiService.MockStreamChat(c.Request.Context(), cachedAnswer)
 		if err == nil {
-			// 异步保存会话
 			go func() {
 				ctx := context.Background()
-				session, err := h.aiService.GetSession(c.Request.Context(), username)
+				session, err := h.aiService.GetSession(ctx, username)
 				if err != nil {
 					metrics.IncOperation("ai", "chat_sse", "failure: get session error")
 					zlog.Warnw("获取会话失败", "detail", "无法获取或创建用户会话")
-
 					return
 				}
 
@@ -130,30 +140,31 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 					AI:   cachedAnswer,
 				})
 				session.Trim(h.aiService.GetMaxSessionTurns())
-				if err := h.aiService.SaveSession(ctx, username, session); err != nil {
+				if saveErr := h.aiService.SaveSession(ctx, username, session); saveErr != nil {
 					metrics.IncOperation("ai", "chat_sse", "failure: save session error")
-					zlog.Warnw("AI会话保存失败", "detail", "无法保存用户会话信息")
+					zlog.Warnw("AI 会话保存失败", "detail", "无法保存用户会话信息")
 				}
 			}()
-			// 模拟流式响应
+
 			for mockStream.Next() {
 				chunk := mockStream.Current()
 				if chunk == "" {
 					continue
 				}
-				c.Writer.Write([]byte(chunk))
+				if _, err := c.Writer.Write([]byte(chunk)); err != nil {
+					zlog.Warnw("SSE write failed", "error", err)
+					continue // 只打印日志，不中断循环
+				}
 				c.Writer.Flush()
-				// 模拟延迟（更像真实 AI）
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(mockStreamDelay) // 模拟延迟（更像真实 AI）
 			}
 
-			return // 缓存命中，模拟流式响应完成，无需继续使用真实 ai 服务
+			return
 		}
-		// 缓存命中或获取模拟流，继续使用真实 ai 服务
 	}
 
 	metrics.IncOperation("ai", "cache_hit", "failure")
-	zlog.Infow("AI对话(SSE)缓存未命中", "question", req.Question)
+	zlog.Infow("AI 对话 (SSE) 缓存未命中", "question", req.Question)
 
 	session, err := h.aiService.GetSession(c.Request.Context(), username)
 	if err != nil {
@@ -161,65 +172,62 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 		zlog.Warnw("获取会话失败", "detail", "无法获取或创建用户会话")
 		// 记录错误，但是不终止，允许不借助对话历史
 	}
+
 	stream, err := h.aiService.StreamChat(c.Request.Context(), session, &req, modelID, userID)
 	if err != nil {
 		metrics.IncOperation("ai", "chat_sse", "failure: service error")
-		zlog.Warnw("AI对话请求失败", "detail", "AI服务调用失败")
+		zlog.Warnw("AI 对话请求失败", "detail", "AI 服务调用失败")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "result": false})
 
 		return
 	}
 
-	// 用于记录完整 AI 响应（用于保存会话）
 	var aiResp strings.Builder
-	// 用于缓冲待发送的内容（提升性能）
-	var buffer strings.Builder
+	sendChan := make(chan string, 64)
+	errChan := make(chan error, 1)
 
-	ticker := time.NewTicker(64 * time.Millisecond)
-	defer ticker.Stop()
-
-	done := make(chan bool)
 	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				if buffer.Len() > 0 {
-					// 写入客户端
-					// 不使用c.SSE，ai响应本身就是流式，无需再SSE
-					c.Writer.Write([]byte(buffer.String()))
-					c.Writer.Flush()
-					// 同步到完整响应记录
-					aiResp.WriteString(buffer.String())
-					buffer.Reset()
+		defer close(sendChan)
+		for stream.Next() {
+			content := stream.Current().Choices[0].Delta.Content
+			if content != "" {
+				select {
+				case sendChan <- content:
+				default:
 				}
-			case <-done:
-				return
 			}
+		}
+		if err := stream.Err(); err != nil {
+			errChan <- err
 		}
 	}()
 
-	for stream.Next() {
-		buffer.WriteString(stream.Current().Choices[0].Delta.Content)
+	for {
+		select {
+		case chunk, ok := <-sendChan:
+			if !ok {
+				goto StreamEnd
+			}
+			if _, err := c.Writer.Write([]byte(chunk)); err != nil {
+				zlog.Warnw("SSE write failed", "error", err)
+				return
+			}
+			c.Writer.Flush()
+			aiResp.WriteString(chunk)
+		case <-time.After(streamFlushTimeout):
+			zlog.Warnw("SSE stream timeout")
+			c.Writer.Write([]byte("\n[ERROR: 流式传输超时，请重试]"))
+			c.Writer.Flush()
+			return
+		}
 	}
 
-	// 停止ticker并关闭done通道
-	ticker.Stop()
-	close(done)
-
-	// 最终 flush 剩余内容
-	if buffer.Len() > 0 {
-		c.Writer.Write([]byte(buffer.String()))
-		c.Writer.Flush()
-		aiResp.WriteString(buffer.String())
-		buffer.Reset()
-	}
-
-	if err := stream.Err(); err != nil {
+StreamEnd:
+	if err, ok := <-errChan; ok {
 		metrics.IncOperation("ai", "chat_sse", "failure: stream error")
-		zlog.Errorw("AI流式传输失败", "error", err, "question", req.Question)
+		zlog.Errorw("AI 流式传输失败", "error", err, "question", req.Question)
 		c.Writer.Write([]byte("\n[ERROR: 流式传输中断，请重试]"))
 		c.Writer.Flush()
-
 		return
 	}
 
@@ -227,19 +235,17 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 		ctx := context.Background()
 		session.AddTurns(req.Question, aiResp.String())
 		session.Trim(h.aiService.GetMaxSessionTurns())
-		if err := h.aiService.SaveSession(ctx, username, session); err != nil {
+		if saveErr := h.aiService.SaveSession(ctx, username, session); saveErr != nil {
 			metrics.IncOperation("ai", "chat_sse", "failure: save session error")
-			zlog.Warnw("AI会话保存失败", "detail", "无法保存用户会话信息")
+			zlog.Warnw("AI 会话保存失败", "detail", "无法保存用户会话信息")
 		}
 	}()
 
 	metrics.IncOperation("ai", "chat_sse", "success")
-	zlog.Infow("AI对话(SSE)请求成功")
+	zlog.Infow("AI 对话 (SSE) 请求成功")
 }
 
-// ================ WebSocket ================
 func (h *AIHandler) AIChatWS(c *gin.Context) {
-	fmt.Println("=============== AIChatWS ================")
 	start := time.Now()
 	defer func() {
 		metrics.ObserveOperationDuration("ai", "chat_ws", time.Since(start).Seconds())
@@ -247,7 +253,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 
 	if c.Request.Header.Get("Upgrade") != "websocket" {
 		metrics.IncOperation("ai", "chat_ws", "failure: upgrade required")
-		zlog.Warnw("AI对话请求失败", "detail", "升级为WebSocket协议失败")
+		zlog.Warnw("AI 对话请求失败", "detail", "升级为 WebSocket 协议失败")
 		c.JSON(http.StatusBadRequest, gin.H{"msg": "upgrade required", "result": false})
 
 		return
@@ -259,21 +265,18 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 		return
 	}
 
-	// 获取用户ID
 	userID := c.GetInt64("user_id")
 	if userID == 0 {
-		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户 ID"})
 		return
 	}
 
-	// 升级HTTP连接为WebSocket
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		zlog.Errorw("WebSocket upgrade failed", "error", err)
 		return
 	}
 	defer conn.Close()
-	fmt.Println(c.Request.URL, " ", c.Request.Host)
 
 	var writeMu sync.Mutex
 
@@ -281,9 +284,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 	safeWrite := func(msg model.WsMessage) error {
 		writeMu.Lock()
 		defer writeMu.Unlock()
-		// 设置写超时：10分钟内必须回复，否则断开
-		conn.SetWriteDeadline(time.Now().Add(10 * time.Minute))
-
+		conn.SetWriteDeadline(time.Now().Add(wsMaxWriteTimeout))
 		return conn.WriteJSON(msg)
 	}
 
@@ -297,25 +298,27 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 		currentStream *StreamControl
 	)
 
-	// 连接关闭时确保清理
 	defer func() {
 		mu.Lock()
 		if currentStream != nil {
 			currentStream.cancel()
-			<-currentStream.done
+			select {
+			case <-currentStream.done:
+			case <-time.After(2 * time.Second):
+			}
 		}
 		mu.Unlock()
 	}()
 
 	// 在 conn 成功 upgrade 后
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(wsHeartbeatInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				if err := safeWrite(model.WsMessage{Type: model.MsgTypePing}); err != nil {
-					return // 连接已断
+					return
 				}
 			case <-c.Request.Context().Done(): // 可关联到连接生命周期
 				return
@@ -325,8 +328,8 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 
 	// 主消息循环
 	for {
-		// 设置读超时：5分钟内必须发消息，否则断开
-		conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
+		// 设置读超时：wsReadTimeout 内必须发消息，否则断开
+		conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
 		_, msgBytes, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -348,61 +351,58 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 			mu.Lock()
 			if currentStream != nil {
 				currentStream.cancel()
-				<-currentStream.done
+				select {
+				case <-currentStream.done:
+				case <-time.After(2 * time.Second):
+				}
 			}
 
 			// 处理聊天消息
 			var req dto.AIChatRequest
 			if err := json.Unmarshal([]byte(incoming.Data), &req); err != nil {
+				mu.Unlock()
 				safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "invalid JSON format"})
 				continue
 			}
 
-			// 获取模型ID，默认为0（使用默认模型）
 			modelID := incoming.ModelID
 
-			// 检查AI调用限制（仅默认模型）
-			if modelID == 0 {
+			if modelID == defaultModelID {
 				canCall, err := h.aiService.CheckAICallLimit(c.Request.Context(), userID)
 				if err != nil {
 					metrics.IncOperation("ai", "chat_ws", "failure: check call limit error")
-					zlog.Warnw("检查AI调用限制失败", "detail", "无法检查用户调用限制")
+					zlog.Warnw("检查 AI 调用限制失败", "detail", "无法检查用户调用限制")
+					mu.Unlock()
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "检查调用限制失败"})
-
 					continue
 				}
 				if !canCall {
 					metrics.IncOperation("ai", "chat_ws", "failure: call limit exceeded")
-					zlog.Warnw("AI调用次数已达今日上限", "username", username)
-					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "AI调用次数已达今日上限，请明日再试或使用自定义模型"})
-
+					zlog.Warnw("AI 调用次数已达今日上限", "username", username)
+					mu.Unlock()
+					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "AI 调用次数已达今日上限，请明日再试或使用自定义模型"})
 					continue
 				}
 			}
 
-			// 创建新的上下文和取消函数
-			ctx, cancel := context.WithCancel(context.Background())
+			streamCtx, streamCancel := context.WithCancel(context.Background())
 			doneChan := make(chan struct{})
 			currentStream = &StreamControl{
-				cancel: cancel,
+				cancel: streamCancel,
 				done:   doneChan,
 			}
 			mu.Unlock()
 
 			qaCacheAnswer := h.aiService.CheckCache(req.Question)
-			// 判断是否命中预置缓存
 			if qaCacheAnswer != "" {
-				fmt.Println("\nWebSocket 命中缓存，问题是：", req.Question)
 				metrics.IncOperation("ai", "cache_hit", "success")
-				mockStream, err := h.aiService.MockStreamChat(ctx, qaCacheAnswer)
+				mockStream, err := h.aiService.MockStreamChat(streamCtx, qaCacheAnswer)
 				if err == nil {
-					// 异步保存会话
 					go func() {
-						session, err := h.aiService.GetSession(ctx, username)
+						session, err := h.aiService.GetSession(streamCtx, username)
 						if err != nil {
 							metrics.IncOperation("ai", "chat_ws", "failure: get session error")
 							zlog.Errorw("Get session failed", "error", err)
-
 							return
 						}
 						session.AddTurns(req.Question, qaCacheAnswer)
@@ -412,35 +412,30 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 							zlog.Errorw("Save session failed", "error", saveErr)
 						}
 					}()
-					// 启动异步模拟流处理
+
 					go func() {
-						defer close(doneChan) // 通知主 goroutine: 我已完成
+						defer close(doneChan)
 						for mockStream.Next() {
-							// 检查是否被取消
 							select {
-							case <-ctx.Done():
+							case <-streamCtx.Done():
 								safeWrite(model.WsMessage{Type: model.MsgTypeStopped})
 								return
 							default:
 								// 继续发送chuck
 							}
 							content := mockStream.Current()
-
-							conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-							time.Sleep(100 * time.Millisecond) // 模拟ai延迟
 							if err := safeWrite(model.WsMessage{Type: model.MsgTypeChunk, Data: content}); err != nil {
 								zlog.Warnw("WebSocket write message failed", "error", err)
 								return
 							}
+							time.Sleep(mockStreamDelay)
 						}
 
-						// 流结束
 						if err := mockStream.Err(); err != nil {
 							safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: err.Error()})
 						} else {
 							safeWrite(model.WsMessage{Type: model.MsgTypeDone})
 						}
-						fmt.Println("MockAI 回答：", qaCacheAnswer)
 					}()
 
 					continue
@@ -448,41 +443,35 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 			}
 
 			metrics.IncOperation("ai", "cache_hit", "failure")
-			// 未命中缓存/MockStreamChat失败，升级到 ai 服务
-			// 异步启动 AI 流
 			go func() {
-				defer close(doneChan) // 通知主 goroutine: 我已完成
+				defer close(doneChan)
 
-				// 增加AI调用计数（仅默认模型）
-				if modelID == 0 {
+				if modelID == defaultModelID {
 					if err := h.aiService.IncrementAICallCount(context.Background(), userID); err != nil {
 						metrics.IncOperation("ai", "chat_ws", "failure: increment call count error")
-						zlog.Warnw("增加AI调用计数失败", "detail", "无法更新用户调用计数")
+						zlog.Warnw("增加 AI 调用计数失败", "detail", "无法更新用户调用计数")
 					}
 				}
 
-				session, err := h.aiService.GetSession(ctx, username)
+				session, err := h.aiService.GetSession(streamCtx, username)
 				if err != nil {
 					metrics.IncOperation("ai", "chat_ws", "failure: get session error")
 					zlog.Errorw("Get session failed", "error", err)
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: err.Error()})
-
 					return
 				}
-				stream, err := h.aiService.StreamChat(ctx, session, &req, modelID, userID)
+				stream, err := h.aiService.StreamChat(streamCtx, session, &req, modelID, userID)
 				if err != nil {
 					metrics.IncOperation("ai", "chat_ws", "failure: stream chat error")
 					zlog.Errorw("Stream chat failed", "error", err)
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: err.Error()})
-
 					return
 				}
 
 				var aiResp strings.Builder
 				for stream.Next() {
-					// 检查是否被取消
 					select {
-					case <-ctx.Done():
+					case <-streamCtx.Done():
 						safeWrite(model.WsMessage{Type: model.MsgTypeStopped})
 						return
 					default:
@@ -490,37 +479,33 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 					}
 					content := stream.Current().Choices[0].Delta.Content
 					// 下面三个参数有些ai不会携带
-					fmt.Println("CompletionTokens: ", stream.Current().Usage.CompletionTokens)
-					fmt.Println("PromptTokens: ", stream.Current().Usage.PromptTokens)
-					fmt.Println("TotalTokens: ", stream.Current().Usage.TotalTokens)
+					// fmt.Println("CompletionTokens: ", stream.Current().Usage.CompletionTokens)
+					// fmt.Println("PromptTokens: ", stream.Current().Usage.PromptTokens)
+					// fmt.Println("TotalTokens: ", stream.Current().Usage.TotalTokens)
 					aiResp.WriteString(content)
 
-					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					if err := safeWrite(model.WsMessage{Type: model.MsgTypeChunk, Data: content}); err != nil {
 						zlog.Warnw("WebSocket write message failed", "error", err)
 						return
 					}
 				}
 
-				// 流结束
 				if err := stream.Err(); err != nil {
 					safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: err.Error()})
 				} else {
 					safeWrite(model.WsMessage{Type: model.MsgTypeDone})
 				}
-				fmt.Println("AI 回答：", aiResp.String())
-				// 异步保存会话
+
 				go func() {
 					session.AddTurns(req.Question, aiResp.String())
 					session.Trim(h.aiService.GetMaxSessionTurns())
 					if saveErr := h.aiService.SaveSession(context.Background(), username, session); saveErr != nil {
 						metrics.IncOperation("ai", "chat_ws", "failure: save session error")
-						zlog.Warnw("AI会话保存失败", "detail", "无法保存用户会话信息")
+						zlog.Warnw("AI 会话保存失败", "detail", "无法保存用户会话信息")
 					}
 				}()
 			}()
 		case model.MsgTypeStop:
-			// 处理停止消息
 			mu.Lock()
 			if currentStream != nil {
 				currentStream.cancel()
@@ -529,8 +514,6 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 			mu.Unlock()
 			safeWrite(model.WsMessage{Type: model.MsgTypeStopped})
 		case model.MsgTypePing:
-			// 处理心跳消息
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			safeWrite(model.WsMessage{Type: model.MsgTypePong})
 		default:
 			safeWrite(model.WsMessage{Type: model.MsgTypeError, Error: "unknown message type"})

@@ -84,13 +84,19 @@ func (r *AIRepositoryImpl) GetAICallCount(ctx context.Context, userID int64) (in
 // IncrementAICallCount 增加用户AI调用次数
 func (r *AIRepositoryImpl) IncrementAICallCount(ctx context.Context, userID int64) error {
 	key := getAICallCountKey(userID)
-	// 增加计数，设置24小时过期
-	err := r.redis.Incr(ctx, key).Err()
-	if err != nil {
-		return err
+
+	pipe := r.redis.Pipeline()
+	incr := pipe.Incr(ctx, key)
+	expire := pipe.Expire(ctx, key, 24*time.Hour)
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("failed to increment AI call count: %w", err)
 	}
-	// 设置过期时间（如果是新键）
-	r.redis.Expire(ctx, key, 24*time.Hour)
+
+	if incr.Err() != nil {
+		return fmt.Errorf("failed to increment AI call count: %w", incr.Err())
+	}
+	_ = expire.Err()
 
 	return nil
 }
