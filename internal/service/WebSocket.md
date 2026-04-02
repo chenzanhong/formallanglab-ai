@@ -27,7 +27,7 @@
 
 ```go
 // api/websocket.go
-package api
+package handler
 
 import (
 	"github.com/chenzanhong/formallanglab-master/internal/domain/dto"
