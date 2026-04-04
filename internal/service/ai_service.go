@@ -26,7 +26,7 @@ const (
 
 请用清晰、准确、循序渐进的方式回答问题，优先解释原理和“为什么”，必要时举例说明。
 
-如果学生提供了自动机结构、文法或测试字符串，请结合具体情境以及已有对话内容进行分析。
+如果学生提供了自动机、文法或正则表达式等结构，请结合具体情境（是否需要结合提供的结构进行回答）以及已有对话内容进行分析。
 
 不要虚构定理或算法，不确定时请说明“标准理论中通常……”。
 
@@ -542,7 +542,7 @@ func (s *AIServiceImpl) formatAutomatonForPrompt(a *model.Automaton) string {
 
 func (s *AIServiceImpl) formatGrammarForPrompt(g *model.Grammar) string {
 	var buf strings.Builder
-	buf.WriteString("当前上下文无关文法（CFG）定义如下：\n")
+	buf.WriteString("当前文法定义如下：\n")
 
 	// 起始符号
 	buf.WriteString("- 起始符号 S：" + string(g.StartSymbol) + "\n")
