@@ -1,10 +1,11 @@
 package handler
 
 import (
-	"github.com/chenzanhong/formallanglab-ai/internal/middleware"
-	mtr "github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
 	"github.com/chenzanhong/goutil/jwtx"
 	"github.com/gin-gonic/gin"
+
+	"github.com/chenzanhong/formallanglab-ai/internal/middleware"
+	mtr "github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
 )
 
 // SetupRouter 设置路由

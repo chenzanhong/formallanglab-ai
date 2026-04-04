@@ -8,15 +8,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chenzanhong/zlog"
+	"github.com/openai/openai-go/v2"
+	"github.com/openai/openai-go/v2/packages/ssestream"
+	"gorm.io/gorm"
+
 	"github.com/chenzanhong/formallanglab-ai/configs"
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/dto"
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	"github.com/chenzanhong/formallanglab-ai/internal/repository"
 	"github.com/chenzanhong/formallanglab-ai/internal/utils"
-	"github.com/chenzanhong/zlog"
-	"github.com/openai/openai-go/v2"
-	"github.com/openai/openai-go/v2/packages/ssestream"
-	"gorm.io/gorm"
 )
 
 const (

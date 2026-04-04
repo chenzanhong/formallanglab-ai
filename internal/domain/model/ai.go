@@ -3,8 +3,9 @@ package model
 import (
 	"time"
 
-	"github.com/chenzanhong/formallanglab-ai/internal/core"
 	"gorm.io/gorm"
+
+	"github.com/chenzanhong/formallanglab-ai/internal/core"
 )
 
 // CustomAIModel 自定义AI模型配置

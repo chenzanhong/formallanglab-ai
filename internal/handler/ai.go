@@ -12,13 +12,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chenzanhong/zlog"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/dto"
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	metrics "github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
 	"github.com/chenzanhong/formallanglab-ai/internal/service"
-	"github.com/chenzanhong/zlog"
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 )
 
 const (

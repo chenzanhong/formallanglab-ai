@@ -3,9 +3,10 @@ package service
 import (
 	"fmt"
 
+	"gorm.io/gorm"
+
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	"github.com/chenzanhong/formallanglab-ai/internal/repository"
-	"gorm.io/gorm"
 )
 
 // QACacheService 提供QA缓存服务接口

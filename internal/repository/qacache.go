@@ -9,9 +9,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	_ "github.com/lib/pq" // PostgreSQL驱动
 	"gorm.io/gorm"
+
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 )
 
 type QACacheLoader struct{}

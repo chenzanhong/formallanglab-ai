@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	"github.com/chenzanhong/zlog"
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 )
 
 // QACacheWatcher 文件系统监控器，用于自动更新QA缓存

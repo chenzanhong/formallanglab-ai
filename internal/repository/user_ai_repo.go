@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
+
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 )
 
 // UserAIProfile 用户 AI 配置表，存储用户的 AI 相关配置

@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 )
 
 type AIRepository interface {
@@ -32,7 +33,6 @@ func NewAIRepository(redisClient *redis.Client) AIRepository {
 
 func (r *AIRepositoryImpl) SaveSession(ctx context.Context, username string, session *model.AISession, sessionExpireSeconds int) error {
 	key := "ai:" + username
-	// fmt.Println(key)
 	data, err := json.Marshal(session)
 	if err != nil {
 		return err

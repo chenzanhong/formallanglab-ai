@@ -6,6 +6,10 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/chenzanhong/goutil/jwtx"
+	"github.com/chenzanhong/zlog"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	cf "github.com/chenzanhong/formallanglab-ai/configs"
 	"github.com/chenzanhong/formallanglab-ai/internal/core"
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
@@ -14,9 +18,6 @@ import (
 	"github.com/chenzanhong/formallanglab-ai/internal/repository"
 	"github.com/chenzanhong/formallanglab-ai/internal/server"
 	"github.com/chenzanhong/formallanglab-ai/internal/service"
-	"github.com/chenzanhong/goutil/jwtx"
-	"github.com/chenzanhong/zlog"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func init() {
