@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -19,14 +18,12 @@ func NewQACache() *QACache {
 
 func (c *QACache) Get(key string) string {
 	key = c.normalize(key)
-	fmt.Println("规格化后的提问：", key)
-
 	return c.data[key]
 }
 
 var spaceRegex = regexp.MustCompile(`\s+`)
 
-// 标准化提问key
+// normalize 标准化提问 key
 // 1. 去除前后空白
 // 2. 去除行内所有空格
 // 3. 去除末尾中英文句子常见的结尾标点符号

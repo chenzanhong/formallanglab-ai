@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
+	"github.com/chenzanhong/zlog"
 )
 
 type QACacheLoader struct{}
@@ -30,7 +31,6 @@ var aliasPattern = regexp.MustCompile(`<!--\s*aliases:\s*(\[.*?\])\s*-->`)
 func (l *QACacheLoader) LoadCache(cache *model.QACache, dirPath string) error {
 	wd, _ := os.Getwd()
 	qaCachePath := filepath.Join(wd, dirPath)
-	fmt.Println("qaCachePath: ", qaCachePath)
 	// 使用 filepath.WalkDir 遍历目录，仅处理 .md 文件
 	return filepath.WalkDir(qaCachePath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -50,10 +50,8 @@ func (l *QACacheLoader) LoadCache(cache *model.QACache, dirPath string) error {
 		text := string(content)
 		// 提取 aliases 元数据
 		matches := aliasPattern.FindStringSubmatch(text)
-		// fmt.Printf("%+v\n", matches)
 		if len(matches) < 2 {
-			// 没有找到 aliases，跳过或记录警告
-			fmt.Printf("警告：文件 %s 缺少 aliases 元数据\n", path)
+			zlog.Warnw("QA cache file missing aliases metadata", "file", path)
 			return nil
 		}
 
@@ -99,10 +97,8 @@ func (l *QACacheLoader) LoadCacheFile(cache *model.QACache, filepath string) err
 	text := string(content)
 	// 提取 aliases 元数据
 	matches := aliasPattern.FindStringSubmatch(text)
-	// fmt.Printf("%+v\n", matches)
 	if len(matches) < 2 {
-		// 没有找到 aliases，跳过或记录警告
-		fmt.Printf("警告：文件 %s 缺少 aliases 元数据\n", filepath)
+		zlog.Warnw("QA cache file missing aliases metadata", "file", filepath)
 		return nil
 	}
 
@@ -170,8 +166,7 @@ func (r *QACacheRepository) LoadCacheFromDB(cache *model.QACache) error {
 		// 解析content中的aliases元数据和答案（与文件加载逻辑相同）
 		matches := aliasPattern.FindStringSubmatch(content)
 		if len(matches) < 2 {
-			// 没有找到aliases，跳过此记录
-			fmt.Printf("警告：数据库记录缺少aliases元数据\n")
+			zlog.Warnw("QA cache database record missing aliases metadata")
 			continue
 		}
 

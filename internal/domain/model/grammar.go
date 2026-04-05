@@ -23,7 +23,7 @@ var GrammarTypeNameMap = map[GrammarType]string{
 	InvalidGrammar:          "无效文法",
 }
 
-// 工具函数：将用户输入映射为标准 ε
+// NormalizeSymbol 工具函数：将用户输入映射为标准 ε
 func NormalizeSymbol(s string) Symbol {
 	switch s {
 	case "ε", "epsilon", "e", "E", "", "λ", "eps":

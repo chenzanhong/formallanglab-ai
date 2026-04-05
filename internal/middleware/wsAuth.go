@@ -19,7 +19,7 @@ func SetJWTKey(key string) {
 	})
 }
 
-// 1. 定义一个只用于提取 username 的轻量 JWT 中间件
+// AuthWebsocket 一个用于 WS 的轻量 JWT 中间件
 func AuthWebsocket() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := c.Query("token")
@@ -46,9 +46,8 @@ func AuthWebsocket() gin.HandlerFunc {
 			return
 		}
 
-		// 把用户名和用户 ID 存入上下文，供 handler 使用
 		c.Set("username", claims.Username)
 		c.Set("user_id", claims.UserID)
-		c.Next() // 继续执行 handler（即你的 AIChatWS）
+		c.Next() // 继续执行 handler（即 AIChatWS）
 	}
 }

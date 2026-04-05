@@ -487,10 +487,10 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 						safeWrite(model.WsMessage{Type: model.MsgTypeStopped})
 						return
 					default:
-						// 继续发送chuck
+						// 继续发送 chunk
 					}
 					content := stream.Current().Choices[0].Delta.Content
-					// 下面三个参数有些ai不会携带
+					// 下面三个参数有些模型接口不会返回对应的值
 					// fmt.Println("CompletionTokens: ", stream.Current().Usage.CompletionTokens)
 					// fmt.Println("PromptTokens: ", stream.Current().Usage.PromptTokens)
 					// fmt.Println("TotalTokens: ", stream.Current().Usage.TotalTokens)
