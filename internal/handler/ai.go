@@ -570,11 +570,11 @@ func (h *AIHandler) AddCustomAIModel(c *gin.Context) {
 		return
 	}
 
-	// 验证AI客户端连接是否有效
-	if err := h.aiService.ValidateClient(c.Request.Context(), req.APIKey, req.APIBaseURL); err != nil {
-		zlog.Warnw("AI客户端验证失败", "error", err, "provider", req.Provider, "base_url", req.APIBaseURL)
+	// 验证 AI 客户端连接是否有效（包括模型名称验证）
+	if err := h.aiService.ValidateClient(c.Request.Context(), req.APIKey, req.APIBaseURL, req.ModelName, req.Provider); err != nil {
+		zlog.Warnw("AI 客户端验证失败", "error", err, "provider", req.Provider, "base_url", req.APIBaseURL, "model", req.ModelName)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error":  "模型连接验证失败，请检查API密钥和Base URL是否正确",
+			"error":  "模型连接验证失败，请检查 API 密钥、Base URL 和模型名称是否正确",
 			"detail": err.Error(),
 			"result": false,
 		})
@@ -658,11 +658,11 @@ func (h *AIHandler) UpdateCustomAIModel(c *gin.Context) {
 		return
 	}
 
-	// 验证AI客户端连接是否有效
-	if err := h.aiService.ValidateClient(c.Request.Context(), req.APIKey, req.APIBaseURL); err != nil {
-		zlog.Warnw("AI客户端验证失败", "error", err, "provider", req.Provider, "base_url", req.APIBaseURL)
+	// 验证 AI 客户端连接是否有效（包括模型名称验证）
+	if err := h.aiService.ValidateClient(c.Request.Context(), req.APIKey, req.APIBaseURL, req.ModelName, req.Provider); err != nil {
+		zlog.Warnw("AI 客户端验证失败", "error", err, "provider", req.Provider, "base_url", req.APIBaseURL, "model", req.ModelName)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error":  "模型连接验证失败，请检查API密钥和Base URL是否正确",
+			"error":  "模型连接验证失败，请检查 API 密钥、Base URL 和模型名称是否正确",
 			"detail": err.Error(),
 			"result": false,
 		})

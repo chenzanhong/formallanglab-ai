@@ -14,7 +14,7 @@ type AIChatRequest struct {
 }
 
 // ========== Custom AI Model DTOs ===========
-// CustomAIModelRequest 自定义AI模型请求
+// CustomAIModelRequest 自定义 AI 模型请求
 type CustomAIModelRequest struct {
 	Name       string `json:"name" binding:"required"`
 	Provider   string `json:"provider" binding:"required"`

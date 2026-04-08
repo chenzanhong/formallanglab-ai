@@ -8,12 +8,12 @@ import (
 	"github.com/chenzanhong/formallanglab-ai/internal/core"
 )
 
-// CustomAIModel 自定义AI模型配置
+// CustomAIModel 自定义 AI 模型配置
 type CustomAIModel struct {
 	ID         int64          `json:"id" gorm:"primarykey"`
 	UserID     int64          `json:"user_id" gorm:"index;column:user_id"`
 	Name       string         `json:"name" gorm:"column:name"`
-	Provider   string         `json:"provider" gorm:"column:provider"` // 如：openai_compat, ollama, azure等
+	Provider   string         `json:"provider" gorm:"column:provider"` // 如：openai_compat, ollama, azure 等
 	APIBaseURL string         `json:"api_base_url" gorm:"column:api_base_url"`
 	APIKey     string         `json:"api_key" gorm:"column:api_key"`
 	ModelName  string         `json:"model_name" gorm:"column:model_name"`

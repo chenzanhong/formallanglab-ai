@@ -144,16 +144,33 @@ func (m *OpenAIClientManager) cleanup() {
 	}
 }
 
-// validateClient 验证客户端配置是否有效
-func validateClient(ctx context.Context, apiKey, baseURL string) error {
+// validateClient 验证客户端配置是否有效（已废弃，请使用适配器的 ValidateClient 方法）
+// 保留此函数仅用于兼容性，建议迁移到 ModelAdapter.ValidateClient
+func validateClient(ctx context.Context, apiKey, baseURL string, modelName ...string) error {
 	client := openai.NewClient(
 		option.WithAPIKey(apiKey),
 		option.WithBaseURL(baseURL),
 	)
 
+	// 如果提供了模型名称，验证模型是否存在：尝试发起对话请求
+	if len(modelName) > 0 && modelName[0] != "" {
+		// 尝试获取指定模型的信息
+		_, err := client.Models.Get(ctx, modelName[0])
+		if err != nil {
+			// 备选
+			_, listErr := client.Models.List(ctx)
+			if listErr != nil {
+				return fmt.Errorf("模型 '%s' 验证失败：%w", modelName[0], listErr)
+			}
+			return nil
+		}
+		return nil
+	}
+
+	// 否则只验证 API Key 能否列出模型
 	_, err := client.Models.List(ctx)
 	if err != nil {
-		return fmt.Errorf("OpenAI客户端连接测试失败: %w", err)
+		return fmt.Errorf("OpenAI 客户端连接测试失败：%w", err)
 	}
 
 	return nil

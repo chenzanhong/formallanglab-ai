@@ -10,6 +10,7 @@ import (
 
 	"github.com/chenzanhong/zlog"
 	"github.com/openai/openai-go/v2"
+	"github.com/openai/openai-go/v2/option"
 	"github.com/openai/openai-go/v2/packages/ssestream"
 	"gorm.io/gorm"
 
@@ -50,7 +51,7 @@ type AIService interface {
 
 	GetCustomAIModel(ctx context.Context, modelID int64, userID int64) (map[string]string, error)
 	GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error)
-	ValidateClient(ctx context.Context, apiKey, baseURL string) error
+	ValidateClient(ctx context.Context, apiKey, baseURL, modelName, provider string) error
 	AddCustomAIModel(ctx context.Context, userID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error)
 	UpdateCustomAIModel(ctx context.Context, userID int64, modelID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error)
 	DeleteCustomAIModel(ctx context.Context, userID int64, modelID int64) error
@@ -116,12 +117,10 @@ func (s *AIServiceImpl) StreamChat(ctx context.Context, session *model.AISession
 
 		// 解密 API 密钥
 		decryptedAPIKey, err := utils.Decrypt(modelConfig["api_key"], s.aiCfg.CryptoKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decrypt api key: %w", err)
-		}
+		baseURL := modelConfig["base_url"]
 
 		// 动态创建客户端
-		client, err := s.clientManager.GetClient(decryptedAPIKey, modelConfig["base_url"])
+		client, err := s.clientManager.GetClient(decryptedAPIKey, baseURL)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get client: %w", err)
 		}
@@ -304,8 +303,35 @@ func (s *AIServiceImpl) GetCustomAIModel(ctx context.Context, modelID int64, use
 	return modelConfig, nil
 }
 
-// AddCustomAIModel 添加自定义AI模型配置
+// ValidateModelConfig 验证模型配置是否非空
+func ValidateModelConfig(provider, apiKey, secretKey, baseURL, modelName string) error {
+	if provider == "" {
+		return fmt.Errorf("服务商不能为空")
+	}
+
+	if apiKey == "" {
+		return fmt.Errorf("API Key 不能为空")
+	}
+
+	if modelName == "" {
+		return fmt.Errorf("模型名称不能为空")
+	}
+
+	// 验证 Base URL
+	if baseURL == "" {
+		return fmt.Errorf("Base URL 不能为空")
+	}
+
+	return nil
+}
+
+// AddCustomAIModel 添加自定义 AI 模型配置
 func (s *AIServiceImpl) AddCustomAIModel(ctx context.Context, userID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error) {
+	// 验证模型配置
+	if err := ValidateModelConfig(req.Provider, req.APIKey, "", req.APIBaseURL, req.ModelName); err != nil {
+		return nil, err
+	}
+
 	// 加密 API key
 	encryptedAPIKey, err := utils.Encrypt(req.APIKey, s.aiCfg.CryptoKey)
 	if err != nil {
@@ -355,13 +381,54 @@ func (s *AIServiceImpl) GetCustomAIModels(ctx context.Context, userID int64) ([]
 	return models, nil
 }
 
-// ValidateClient 验证自定义AI模型配置是否有效
-func (s *AIServiceImpl) ValidateClient(ctx context.Context, apiKey, baseURL string) error {
-	return validateClient(ctx, apiKey, baseURL)
+// ValidateClient 验证自定义 AI 模型配置是否有效
+func (s *AIServiceImpl) ValidateClient(ctx context.Context, apiKey, baseURL, modelName, provider string) error {
+	client := openai.NewClient(
+		option.WithAPIKey(apiKey),
+		option.WithBaseURL(baseURL),
+	)
+
+	// 如果有模型名称，直接发起一次流式对话测试
+	if modelName != "" {
+		stream := client.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
+			Model: modelName,
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("你好，请回复 1"),
+			},
+			MaxTokens: openai.Int(1),
+		})
+		defer stream.Close()
+
+		// 读取第一个响应块，验证连接和模型是否可用
+		if stream.Next() {
+			// 成功接收到响应
+			return nil
+		}
+
+		// 检查是否有错误
+		if err := stream.Err(); err != nil {
+			return fmt.Errorf("模型 '%s' 流式对话测试失败：%w", modelName, err)
+		}
+
+		return fmt.Errorf("模型 '%s' 未返回任何响应", modelName)
+	}
+
+	// 没有模型名称，只验证 API Key 能否列出模型
+	_, err := client.Models.List(ctx)
+	if err != nil {
+		return fmt.Errorf("大模型 API 连接测试失败：%w", err)
+	}
+
+	return nil
 }
 
-// UpdateCustomAIModel 更新自定义AI模型配置
+// UpdateCustomAIModel 更新自定义 AI 模型配置
 func (s *AIServiceImpl) UpdateCustomAIModel(ctx context.Context, userID int64, modelID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error) {
+	// 验证模型配置
+	if err := ValidateModelConfig(req.Provider, req.APIKey, "", req.APIBaseURL, req.ModelName); err != nil {
+		return nil, err
+	}
+
 	existingModel, err := s.userAIRepo.GetCustomAIModelByID(ctx, modelID, userID)
 	if err != nil {
 		return nil, err
