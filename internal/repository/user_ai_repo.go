@@ -94,9 +94,9 @@ func (r *UserAIRepositoryImpl) DeleteCustomAIModel(ctx context.Context, id int64
 		return err
 	}
 
-	// 如果是当前使用的模型，将current_model_id设置为0（默认模型）
+	// 如果是当前使用的模型，将 current_model_id 设置为 0（默认模型）
 	if currentModelID != 0 && currentModelID == id {
-		if err := r.UpdateUserCurrentModel(ctx, userID, 0); err != nil {
+		if err := tx.Model(&UserAIProfile{}).Where("user_id = ?", userID).Update("current_model_id", 0).Error; err != nil {
 			tx.Rollback()
 			return err
 		}

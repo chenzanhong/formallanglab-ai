@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS custom_ai_models (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_ai_models_user_id_api_base_url_model_name
-ON custom_ai_models(user_id, api_base_url, model_name);
+ON custom_ai_models(user_id, api_base_url, model_name)
+WHERE deleted_at IS NULL;
 
 -- 创建用户 AI 配置表
 CREATE TABLE IF NOT EXISTS user_ai_profiles (
@@ -27,4 +28,5 @@ CREATE TABLE IF NOT EXISTS user_ai_profiles (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_user_ai_profiles_user_id_current_model_id
-ON user_ai_profiles(user_id, current_model_id);
+ON user_ai_profiles(user_id, current_model_id)
+WHERE deleted_at IS NULL;

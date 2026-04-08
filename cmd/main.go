@@ -78,8 +78,8 @@ func main() {
 		}
 	}()
 
-	// 10. 初始化OpenAI客户端管理器
-	clientManager := service.NewOpenAIClientManager()
+	// 10. 初始化 OpenAI 客户端管理器（TTL 缓存，默认过期时间 30 分钟）
+	clientManager := service.NewOpenAIClientManager(0)
 
 	// 11. 预先初始化默认AI客户端（启动时验证配置是否正确）
 	apiKey := os.Getenv("DASHSCOPE_API_KEY")
@@ -110,7 +110,7 @@ func main() {
 	go func() {
 		metricsPort := os.Getenv("METRICS_PORT")
 		if metricsPort != "" && metricsPort != "0" {
-			zlog.Infow("Starting metrics server on:", metricsPort)
+			zlog.Infow("Starting metrics server on", "port", metricsPort)
 			mux := http.NewServeMux()
 			mux.Handle("/gdesign/ai/metrics", promhttp.Handler())
 			if err := http.ListenAndServe(fmt.Sprintf(":%s", metricsPort), mux); err != nil {
