@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -127,51 +126,38 @@ func (m *OpenAIClientManager) cleanupLoop() {
 
 // cleanup 清理过期客户端
 func (m *OpenAIClientManager) cleanup() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	now := time.Now()
-	count := 0
+
+	// 先读取所有 key，减少持锁时间
+	m.mu.RLock()
+	expiredKeys := make([]string, 0, len(m.clients)/4) // 预估 25% 可能过期
 	for key, entry := range m.clients {
 		if now.Sub(entry.lastAccess) > m.ttl {
-			delete(m.clients, key)
-			count++
+			expiredKeys = append(expiredKeys, key)
 		}
 	}
+	m.mu.RUnlock()
+
+	// 如果没有过期条目，直接返回
+	if len(expiredKeys) == 0 {
+		return
+	}
+
+	// 获取写锁，删除过期条目
+	m.mu.Lock()
+	count := 0
+	for _, key := range expiredKeys {
+		// 双重检查，防止在 RLock 和 Lock 之间被其他 goroutine 访问
+		if entry, exists := m.clients[key]; exists {
+			if now.Sub(entry.lastAccess) > m.ttl {
+				delete(m.clients, key)
+				count++
+			}
+		}
+	}
+	m.mu.Unlock()
 
 	if count > 0 {
-		zlog.Infow("清理过期客户端", "count", count)
+		zlog.Infow("清理过期客户端", "count", count, "total", len(m.clients)+count)
 	}
-}
-
-// validateClient 验证客户端配置是否有效（已废弃，请使用适配器的 ValidateClient 方法）
-// 保留此函数仅用于兼容性，建议迁移到 ModelAdapter.ValidateClient
-func validateClient(ctx context.Context, apiKey, baseURL string, modelName ...string) error {
-	client := openai.NewClient(
-		option.WithAPIKey(apiKey),
-		option.WithBaseURL(baseURL),
-	)
-
-	// 如果提供了模型名称，验证模型是否存在：尝试发起对话请求
-	if len(modelName) > 0 && modelName[0] != "" {
-		// 尝试获取指定模型的信息
-		_, err := client.Models.Get(ctx, modelName[0])
-		if err != nil {
-			// 备选
-			_, listErr := client.Models.List(ctx)
-			if listErr != nil {
-				return fmt.Errorf("模型 '%s' 验证失败：%w", modelName[0], listErr)
-			}
-			return nil
-		}
-		return nil
-	}
-
-	// 否则只验证 API Key 能否列出模型
-	_, err := client.Models.List(ctx)
-	if err != nil {
-		return fmt.Errorf("OpenAI 客户端连接测试失败：%w", err)
-	}
-
-	return nil
 }
