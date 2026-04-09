@@ -10,6 +10,11 @@ import (
 	"github.com/openai/openai-go/v2/option"
 )
 
+const (
+	defaultClientTTL = 60 * time.Minute
+	cleanupInterval  = 10 * time.Minute
+)
+
 // generateCacheKey 生成缓存键
 func generateCacheKey(apiKey, baseURL string) string {
 	return fmt.Sprintf("%s|%s", baseURL, apiKey)
@@ -32,9 +37,8 @@ type OpenAIClientManager struct {
 // NewOpenAIClientManager 创建一个新的客户端管理器
 // ttl 指定客户端的过期时间，建议 30 分钟
 func NewOpenAIClientManager(ttl time.Duration) *OpenAIClientManager {
-	// 设置默认过期时间为 30 分钟
 	if ttl <= 0 {
-		ttl = 60 * time.Minute
+		ttl = defaultClientTTL
 	}
 
 	m := &OpenAIClientManager{
@@ -42,7 +46,6 @@ func NewOpenAIClientManager(ttl time.Duration) *OpenAIClientManager {
 		ttl:     ttl,
 	}
 
-	// 启动后台清理协程，每 5 分钟清理一次过期客户端
 	go m.cleanupLoop()
 
 	return m
@@ -116,7 +119,7 @@ func (m *OpenAIClientManager) RemoveClient(apiKey, baseURL string) {
 
 // cleanupLoop 定期清理过期客户端
 func (m *OpenAIClientManager) cleanupLoop() {
-	ticker := time.NewTicker(5 * time.Minute) // 每 5 分钟清理一次
+	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
