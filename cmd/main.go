@@ -100,10 +100,14 @@ func main() {
 	// 12. 创建AI服务
 	aiService := service.NewAIService(clientManager, aiRepo, userAIRepo, qaCache, config.AI)
 
-	// 13. 启动pprof http服务（通过 PPROF_PORT 环境变量控制，默认为 6060）
+	// 13. 启动 pprof http 服务（通过 PPROF_PORT 环境变量控制，默认为 6060）
 	go func() {
-		zlog.Info("Starting pprof on localhost:" + os.Getenv("PPROF_PORT"))
-		http.ListenAndServe("localhost:"+os.Getenv("PPROF_PORT"), nil)
+		if v, ok := os.LookupEnv("PPROF_PORT"); ok && v != "" && v != "0" {
+			zlog.Info("Starting pprof on :" + v)
+			if err := http.ListenAndServe(":"+v, nil); err != nil {
+				zlog.Errorf("pprof server error: %v", err)
+			}
+		}
 	}()
 
 	// 14. 启动独立的 metrics 服务（通过 METRICS_PORT 环境变量控制）

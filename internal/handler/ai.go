@@ -168,14 +168,18 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 	metrics.IncOperation("ai", "cache_hit", "failure")
 	zlog.Infow("AI 对话 (SSE) 缓存未命中", "question", req.Question)
 
-	session, err := h.aiService.GetSession(c.Request.Context(), username)
+	// 使用可取消的 context，监听客户端断开
+	ctx, cancel := context.WithCancel(c.Request.Context())
+	defer cancel()
+
+	session, err := h.aiService.GetSession(ctx, username)
 	if err != nil {
 		metrics.IncOperation("ai", "chat_sse", "failure: get session error")
 		zlog.Warnw("获取会话失败", "detail", "无法获取或创建用户会话")
 		// 记录错误，但是不终止，允许不借助对话历史
 	}
 
-	stream, err := h.aiService.StreamChat(c.Request.Context(), session, &req, modelID, userID)
+	stream, err := h.aiService.StreamChat(ctx, session, &req, modelID, userID)
 	if err != nil {
 		metrics.IncOperation("ai", "chat_sse", "failure: service error")
 		zlog.Warnw("AI 对话请求失败", "detail", "AI 服务调用失败")
@@ -198,8 +202,12 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 			case <-ticker.C:
 				if buffer.Len() > 0 {
 					// 写入客户端
-					// 不使用c.SSE，ai响应本身就是流式，无需再SSE
-					c.Writer.Write([]byte(buffer.String()))
+					// 不使用 c.SSE，ai 响应本身就是流式，无需再 SSE
+					if _, err := c.Writer.Write([]byte(buffer.String())); err != nil {
+						zlog.Warnw("SSE write failed", "error", err)
+						cancel() // 客户端断开，取消 context
+						return
+					}
 					c.Writer.Flush()
 					// 同步到完整响应记录
 					aiResp.WriteString(buffer.String())
@@ -207,23 +215,39 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 				}
 			case <-done:
 				return
+			case <-ctx.Done():
+				// 客户端取消请求
+				zlog.Infow("SSE 请求被客户端取消", "question", req.Question)
+				return
 			}
 		}
 	}()
 
 	for stream.Next() {
+		// 检查客户端是否已断开
+		select {
+		case <-ctx.Done():
+			zlog.Infow("SSE 流式传输被取消", "question", req.Question)
+			c.Writer.Write([]byte("\n[已停止生成]"))
+			c.Writer.Flush()
+			return
+		default:
+		}
 		buffer.WriteString(stream.Current().Choices[0].Delta.Content)
 	}
 
-	// 停止ticker并关闭done通道
+	// 停止 ticker 并关闭 done 通道
 	ticker.Stop()
 	close(done)
 
 	// 最终 flush 剩余内容
 	if buffer.Len() > 0 {
-		c.Writer.Write([]byte(buffer.String()))
-		c.Writer.Flush()
-		aiResp.WriteString(buffer.String())
+		if _, err := c.Writer.Write([]byte(buffer.String())); err != nil {
+			zlog.Warnw("SSE final flush failed", "error", err)
+		} else {
+			c.Writer.Flush()
+			aiResp.WriteString(buffer.String())
+		}
 		buffer.Reset()
 	}
 
@@ -237,10 +261,10 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 	}
 
 	go func() {
-		ctx := context.Background()
+		saveCtx := context.Background()
 		session.AddTurns(req.Question, aiResp.String())
 		session.Trim(h.aiService.GetMaxSessionTurns())
-		if saveErr := h.aiService.SaveSession(ctx, username, session); saveErr != nil {
+		if saveErr := h.aiService.SaveSession(saveCtx, username, session); saveErr != nil {
 			metrics.IncOperation("ai", "chat_sse", "failure: save session error")
 			zlog.Warnw("AI 会话保存失败", "detail", "无法保存用户会话信息")
 		}
