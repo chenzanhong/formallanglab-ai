@@ -28,8 +28,10 @@ const (
 	mockStreamDelay    = 100 * time.Millisecond
 
 	wsHeartbeatInterval = 30 * time.Second
-	wsReadTimeout       = 5 * time.Minute
-	wsMaxWriteTimeout   = 10 * time.Minute
+	wsReadTimeout     = 5 * time.Minute
+	wsMaxWriteTimeout = 10 * time.Minute
+
+	streamErrorMessage = "\n[ERROR: 流式传输中断，请重试]"
 )
 
 type AIHandler struct {
@@ -256,7 +258,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 	if err := stream.Err(); err != nil {
 		metrics.IncOperation("ai", "chat_sse", "failure: stream error")
 		zlog.Errorw("AI 流式传输失败", "error", err, "question", req.Question)
-		c.Writer.Write([]byte("\n[ERROR: 流式传输中断，请重试]"))
+		c.Writer.Write([]byte(streamErrorMessage))
 		c.Writer.Flush()
 
 		return

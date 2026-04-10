@@ -3,3 +3,4 @@ asset/qacache/*
 *.log
 .env
 test/*
+*.exe
