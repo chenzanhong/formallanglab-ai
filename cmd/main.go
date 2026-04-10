@@ -13,16 +13,16 @@ import (
 	cf "github.com/chenzanhong/formallanglab-ai/configs"
 	"github.com/chenzanhong/formallanglab-ai/internal/core"
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
-	"github.com/chenzanhong/formallanglab-ai/internal/middleware"
-	mtr "github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
+	"github.com/chenzanhong/formallanglab-ai/internal/middleware/jwt"
+	"github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
 	"github.com/chenzanhong/formallanglab-ai/internal/repository"
 	"github.com/chenzanhong/formallanglab-ai/internal/server"
 	"github.com/chenzanhong/formallanglab-ai/internal/service"
 )
 
 func init() {
-	mtr.PrometheusRegister()  // 初始化Prometheus
-	core.RegisterValidators() // 注册自定义验证器
+	metrics.PrometheusRegister() // 初始化Prometheus
+	core.RegisterValidators()    // 注册自定义验证器
 }
 
 func main() {
@@ -36,17 +36,15 @@ func main() {
 	cf.SyncConfigToEnv(config)
 
 	// 3. 设置 JWT 密钥
-	middleware.SetJWTKey(config.JWT.Key)
-
-	// 4. 初始化日志
-	zlog.InitLogger(config.Log)
-
-	// 使用环境变量中的 JWT key，确保与 auth 服务一致
 	jwtKey := os.Getenv("JWT_KEY")
 	if jwtKey == "" {
 		jwtKey = config.JWT.Key
 	}
-	jwtx.InitWithHS256(jwtKey, &middleware.Claims{}, jwtx.WithAutoInject(true))
+	jwt.SetJWTKey(jwtKey)
+	jwtx.InitWithHS256(jwtKey, &jwt.Claims{}, jwtx.WithAutoInject(true))
+
+	// 4. 初始化日志
+	zlog.InitLogger(config.Log)
 
 	// 5. 初始化Redis
 	redisClient, err := repository.InitRedis()

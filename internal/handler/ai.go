@@ -18,7 +18,7 @@ import (
 
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/dto"
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
-	metrics "github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
+	"github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
 	"github.com/chenzanhong/formallanglab-ai/internal/service"
 )
 
