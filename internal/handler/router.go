@@ -5,10 +5,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/chenzanhong/formallanglab-ai/internal/middleware/cors"
+	"github.com/chenzanhong/formallanglab-ai/internal/middleware/jwt"
 	"github.com/chenzanhong/formallanglab-ai/internal/middleware/metrics"
 	"github.com/chenzanhong/formallanglab-ai/internal/middleware/rate"
 	"github.com/chenzanhong/formallanglab-ai/internal/middleware/requestid"
-	"github.com/chenzanhong/formallanglab-ai/internal/middleware/jwt"
 )
 
 // SetupRouter 设置路由

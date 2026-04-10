@@ -206,6 +206,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 					if _, err := c.Writer.Write([]byte(buffer.String())); err != nil {
 						zlog.Warnw("SSE write failed", "error", err)
 						cancel() // 客户端断开，取消 context
+
 						return
 					}
 					c.Writer.Flush()
@@ -230,6 +231,7 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 			zlog.Infow("SSE 流式传输被取消", "question", req.Question)
 			c.Writer.Write([]byte("\n[已停止生成]"))
 			c.Writer.Flush()
+
 			return
 		default:
 		}
