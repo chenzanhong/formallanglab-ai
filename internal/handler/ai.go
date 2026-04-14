@@ -28,8 +28,8 @@ const (
 	mockStreamDelay    = 100 * time.Millisecond
 
 	wsHeartbeatInterval = 30 * time.Second
-	wsReadTimeout     = 5 * time.Minute
-	wsMaxWriteTimeout = 10 * time.Minute
+	wsReadTimeout       = 5 * time.Minute
+	wsMaxWriteTimeout   = 10 * time.Minute
 
 	streamErrorMessage = "\n[ERROR: 流式传输中断，请重试]"
 )
@@ -130,8 +130,9 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 		mockStream, err := h.aiService.MockStreamChat(c.Request.Context(), cachedAnswer)
 		if err == nil {
 			go func() {
-				ctx := context.Background()
-				session, err := h.aiService.GetSession(ctx, username)
+				saveCtx, cancel := context.WithCancel(c.Request.Context())
+				defer cancel()
+				session, err := h.aiService.GetSession(saveCtx, username)
 				if err != nil {
 					metrics.IncOperation("ai", "chat_sse", "failure: get session error")
 					zlog.Warnw("获取会话失败", "detail", "无法获取或创建用户会话")
@@ -144,23 +145,31 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 					AI:   cachedAnswer,
 				})
 				session.Trim(h.aiService.GetMaxSessionTurns())
-				if saveErr := h.aiService.SaveSession(ctx, username, session); saveErr != nil {
+				session.LastActive = time.Now().Unix()
+				if saveErr := h.aiService.SaveSession(saveCtx, username, session); saveErr != nil {
 					metrics.IncOperation("ai", "chat_sse", "failure: save session error")
 					zlog.Warnw("AI 会话保存失败", "detail", "无法保存用户会话信息")
 				}
 			}()
 
 			for mockStream.Next() {
+				select {
+				case <-c.Request.Context().Done():
+					zlog.Infow("SSE 缓存响应被客户端取消", "question", req.Question)
+					return
+				default:
+				}
+
 				chunk := mockStream.Current()
 				if chunk == "" {
 					continue
 				}
 				if _, err := c.Writer.Write([]byte(chunk)); err != nil {
 					zlog.Warnw("SSE write failed", "error", err)
-					continue // 只打印日志，不中断循环
+					return
 				}
 				c.Writer.Flush()
-				time.Sleep(mockStreamDelay) // 模拟延迟（更像真实 AI）
+				time.Sleep(mockStreamDelay)
 			}
 
 			return
@@ -267,7 +276,9 @@ func (h *AIHandler) AIChatSSE(c *gin.Context) {
 	go func() {
 		saveCtx := context.Background()
 		session.AddTurns(req.Question, aiResp.String())
+
 		session.Trim(h.aiService.GetMaxSessionTurns())
+		session.LastActive = time.Now().Unix()
 		if saveErr := h.aiService.SaveSession(saveCtx, username, session); saveErr != nil {
 			metrics.IncOperation("ai", "chat_sse", "failure: save session error")
 			zlog.Warnw("AI 会话保存失败", "detail", "无法保存用户会话信息")
@@ -444,7 +455,9 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 							return
 						}
 						session.AddTurns(req.Question, qaCacheAnswer)
+
 						session.Trim(h.aiService.GetMaxSessionTurns())
+						session.LastActive = time.Now().Unix()
 						if saveErr := h.aiService.SaveSession(context.Background(), username, session); saveErr != nil {
 							metrics.IncOperation("ai", "chat_ws", "failure: save session error")
 							zlog.Errorw("Save session failed", "error", saveErr)
@@ -538,7 +551,9 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 
 				go func() {
 					session.AddTurns(req.Question, aiResp.String())
+
 					session.Trim(h.aiService.GetMaxSessionTurns())
+					session.LastActive = time.Now().Unix()
 					if saveErr := h.aiService.SaveSession(context.Background(), username, session); saveErr != nil {
 						metrics.IncOperation("ai", "chat_ws", "failure: save session error")
 						zlog.Warnw("AI 会话保存失败", "detail", "无法保存用户会话信息")

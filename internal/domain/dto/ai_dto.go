@@ -8,7 +8,7 @@ import (
 type AIChatRequest struct {
 	Question  string           `json:"question" binding:"required"`
 	Page      core.PageType    `json:"page" binding:"pageValid"`
-	Automaton *model.Automaton `json:"automaton,omitempty"` // ← 指针
+	Automaton *model.Automaton `json:"automaton,omitempty"`
 	Grammar   *model.Grammar   `json:"grammar,omitempty"`
 	Regex     *model.Regex     `json:"regex,omitempty"`
 }

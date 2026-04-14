@@ -25,10 +25,8 @@ type CustomAIModel struct {
 
 type AISession struct {
 	Page        core.PageType `json:"page"`
-	LastActive  int64         `json:"last_active"`            // 最后活跃时间
-	RecentTurns []QAPair      `json:"recent_turns,omitempty"` // 最近的对话记录
-	Summary     string        `json:"summary,omitempty"`      // 会话总结
-	Token       int           `json:"token"`                  // 当前会话的token数
+	LastActive  int64         `json:"last_active"`            // 最近活跃时间（时间戳）
+	RecentTurns []QAPair      `json:"recent_turns,omitempty"` // 对话记录
 }
 
 type QAPair struct {

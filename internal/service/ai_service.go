@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/chenzanhong/zlog"
 	"github.com/openai/openai-go/v2"
@@ -228,13 +227,12 @@ func (s *AIServiceImpl) CheckCache(question string) string {
 	return s.qaCache.Get(question)
 }
 
-// SaveSession 保存会话（不变）
+// SaveSession 保存会话
 func (s *AIServiceImpl) SaveSession(ctx context.Context, username string, session *model.AISession) error {
 	return s.repo.SaveSession(ctx, username, session, s.aiCfg.SessionExpireSeconds)
 }
 
 func (s *AIServiceImpl) GetSession(ctx context.Context, username string) (*model.AISession, error) {
-	// 1. 从redis加载会话
 	session, err := s.repo.GetSession(ctx, username)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load session: %w", err)
@@ -242,7 +240,6 @@ func (s *AIServiceImpl) GetSession(ctx context.Context, username string) (*model
 	if session == nil {
 		session = &model.AISession{}
 	}
-	session.LastActive = time.Now().Unix()
 
 	return session, nil
 }
