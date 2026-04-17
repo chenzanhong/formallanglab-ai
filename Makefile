@@ -21,19 +21,6 @@ lint-fix:
 	@echo "🔧 运行 ai 服务代码质量检查并自动修复..."
 	@golangci-lint run --fix || true
 
-# ========== 为服务打标签 ==========
-# 用法: make tag VERSION=v1.0.1
-tag:
-	@if [ -z "$(VERSION)" ]; then \
-		echo "错误：缺少 VERSION 参数"; \
-		echo "用法: make tag VERSION=v1.0.1"; \
-		exit 1; \
-	fi
-	@echo "📦 为 ai 服务打标签 $(VERSION)..."
-	@git tag $(VERSION)
-	@git push origin tag $(VERSION)
-	@echo "✅ ai 服务标签完成"
-
 # ========== 构建并推送镜像 ==========
 # 用法：make build [T=false]
 build:
