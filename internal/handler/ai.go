@@ -1,5 +1,5 @@
 /*
-AI模块 OpenAI Go SDK版本不低于 v2.4.0
+AI 模块 OpenAI Go SDK 版本不低于 v2.4.0
 */
 package handler
 

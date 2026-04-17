@@ -116,6 +116,9 @@ func (s *AIServiceImpl) StreamChat(ctx context.Context, session *model.AISession
 
 		// 解密 API 密钥
 		decryptedAPIKey, err := utils.Decrypt(modelConfig["api_key"], s.aiCfg.CryptoKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt API key: %w", err)
+		}
 		baseURL := modelConfig["base_url"]
 
 		// 动态创建客户端
@@ -301,7 +304,7 @@ func (s *AIServiceImpl) GetCustomAIModel(ctx context.Context, modelID int64, use
 }
 
 // ValidateModelConfig 验证模型配置是否非空
-func ValidateModelConfig(provider, apiKey, secretKey, baseURL, modelName string) error {
+func ValidateModelConfig(provider, apiKey, baseURL, modelName string) error {
 	if provider == "" {
 		return fmt.Errorf("服务商不能为空")
 	}
@@ -325,7 +328,7 @@ func ValidateModelConfig(provider, apiKey, secretKey, baseURL, modelName string)
 // AddCustomAIModel 添加自定义 AI 模型配置
 func (s *AIServiceImpl) AddCustomAIModel(ctx context.Context, userID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error) {
 	// 验证模型配置
-	if err := ValidateModelConfig(req.Provider, req.APIKey, "", req.APIBaseURL, req.ModelName); err != nil {
+	if err := ValidateModelConfig(req.Provider, req.APIKey, req.APIBaseURL, req.ModelName); err != nil {
 		return nil, err
 	}
 
@@ -422,7 +425,7 @@ func (s *AIServiceImpl) ValidateClient(ctx context.Context, apiKey, baseURL, mod
 // UpdateCustomAIModel 更新自定义 AI 模型配置
 func (s *AIServiceImpl) UpdateCustomAIModel(ctx context.Context, userID int64, modelID int64, req *dto.CustomAIModelRequest) (*model.CustomAIModel, error) {
 	// 验证模型配置
-	if err := ValidateModelConfig(req.Provider, req.APIKey, "", req.APIBaseURL, req.ModelName); err != nil {
+	if err := ValidateModelConfig(req.Provider, req.APIKey, req.APIBaseURL, req.ModelName); err != nil {
 		return nil, err
 	}
 
