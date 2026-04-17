@@ -24,7 +24,7 @@ func (UserAIProfile) TableName() string {
 
 // UserAIRepository 定义用户仓库接口
 type UserAIRepository interface {
-	// 自定义AI模型相关方法
+	// 自定义 AI 模型相关方法
 	AddCustomAIModel(ctx context.Context, model *model.CustomAIModel) error
 	GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error)
 	GetCustomAIModelByID(ctx context.Context, id int64, userID int64) (*model.CustomAIModel, error)
@@ -47,12 +47,12 @@ func NewUserAIRepository(db *gorm.DB, redis *redis.Client) UserAIRepository {
 	return &UserAIRepositoryImpl{DB: db, Redis: redis}
 }
 
-// AddCustomAIModel 添加自定义AI模型配置
+// AddCustomAIModel 添加自定义 AI 模型配置
 func (r *UserAIRepositoryImpl) AddCustomAIModel(ctx context.Context, model *model.CustomAIModel) error {
 	return r.DB.WithContext(ctx).Create(model).Error
 }
 
-// GetCustomAIModels 获取用户的自定义AI模型配置列表
+// GetCustomAIModels 获取用户的自定义 AI 模型配置列表
 func (r *UserAIRepositoryImpl) GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error) {
 	var models []*model.CustomAIModel
 	if err := r.DB.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC").Find(&models).Error; err != nil {
@@ -62,7 +62,7 @@ func (r *UserAIRepositoryImpl) GetCustomAIModels(ctx context.Context, userID int
 	return models, nil
 }
 
-// GetCustomAIModelByID 根据ID获取自定义AI模型配置
+// GetCustomAIModelByID 根据 ID 获取自定义 AI 模型配置
 func (r *UserAIRepositoryImpl) GetCustomAIModelByID(ctx context.Context, id int64, userID int64) (*model.CustomAIModel, error) {
 	var model model.CustomAIModel
 	if err := r.DB.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&model).Error; err != nil {
@@ -72,12 +72,12 @@ func (r *UserAIRepositoryImpl) GetCustomAIModelByID(ctx context.Context, id int6
 	return &model, nil
 }
 
-// UpdateCustomAIModel 更新自定义AI模型配置
+// UpdateCustomAIModel 更新自定义 AI 模型配置
 func (r *UserAIRepositoryImpl) UpdateCustomAIModel(ctx context.Context, model *model.CustomAIModel) error {
 	return r.DB.WithContext(ctx).Save(model).Error
 }
 
-// DeleteCustomAIModel 删除自定义AI模型配置
+// DeleteCustomAIModel 删除自定义 AI 模型配置
 func (r *UserAIRepositoryImpl) DeleteCustomAIModel(ctx context.Context, id int64, userID int64) error {
 	// 开始事务
 	tx := r.DB.WithContext(ctx).Begin()
@@ -111,13 +111,13 @@ func (r *UserAIRepositoryImpl) DeleteCustomAIModel(ctx context.Context, id int64
 	return tx.Commit().Error
 }
 
-// GetUserCurrentModelID 获取用户当前使用的模型ID
+// GetUserCurrentModelID 获取用户当前使用的模型 ID
 func (r *UserAIRepositoryImpl) GetUserCurrentModelID(ctx context.Context, userID int64) (int64, error) {
 	var profile UserAIProfile
 	result := r.DB.WithContext(ctx).Where("user_id = ?", userID).First(&profile)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			// 用户AI配置不存在，返回0（默认模型）
+			// 用户 AI 配置不存在，返回 0（默认模型）
 			err := r.EnsureUserAIProfile(ctx, userID)
 			if err != nil {
 				return 0, err
@@ -132,9 +132,9 @@ func (r *UserAIRepositoryImpl) GetUserCurrentModelID(ctx context.Context, userID
 	return profile.CurrentModelID, nil
 }
 
-// UpdateUserCurrentModel 更新用户当前使用的模型ID
+// UpdateUserCurrentModel 更新用户当前使用的模型 ID
 func (r *UserAIRepositoryImpl) UpdateUserCurrentModel(ctx context.Context, userID int64, modelID int64) error {
-	// 确保用户AI配置存在
+	// 确保用户 AI 配置存在
 	err := r.EnsureUserAIProfile(ctx, userID)
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func (r *UserAIRepositoryImpl) CheckModelOwnership(ctx context.Context, modelID 
 	return count > 0, nil
 }
 
-// EnsureUserAIProfile 确保用户AI配置记录存在
+// EnsureUserAIProfile 确保用户 AI 配置记录存在
 func (r *UserAIRepositoryImpl) EnsureUserAIProfile(ctx context.Context, userID int64) error {
 	var count int64
 	if err := r.DB.WithContext(ctx).Model(&UserAIProfile{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {

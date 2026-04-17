@@ -52,7 +52,7 @@ type WsMessage struct {
 	Type    WsMessageType `json:"type"` //  "chat", "stop", "chunk", "done", "error", "stopped"
 	Data    string        `json:"data,omitempty"`
 	Error   string        `json:"error,omitempty"`
-	ModelID int64         `json:"model_id,omitempty"` // 自定义模型ID，0表示使用默认模型
+	ModelID int64         `json:"model_id,omitempty"` // 自定义模型 ID，0 表示使用默认模型
 }
 
 func (s *AISession) Trim(maxTurns int) {

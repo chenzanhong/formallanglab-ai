@@ -65,13 +65,13 @@ func getAICallCountKey(userID int64) string {
 	return fmt.Sprintf("ai-%s-%d-num", time.Now().Format("20060102"), userID)
 }
 
-// GetAICallCount 获取用户AI调用次数
+// GetAICallCount 获取用户 AI 调用次数
 func (r *AIRepositoryImpl) GetAICallCount(ctx context.Context, userID int64) (int, error) {
 	key := getAICallCountKey(userID)
 	count, err := r.redis.Get(ctx, key).Int()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			// 键不存在，返回0
+			// 键不存在，返回 0
 			return 0, nil
 		}
 
@@ -81,7 +81,7 @@ func (r *AIRepositoryImpl) GetAICallCount(ctx context.Context, userID int64) (in
 	return count, nil
 }
 
-// IncrementAICallCount 增加用户AI调用次数
+// IncrementAICallCount 增加用户 AI 调用次数
 func (r *AIRepositoryImpl) IncrementAICallCount(ctx context.Context, userID int64) error {
 	key := getAICallCountKey(userID)
 
@@ -101,7 +101,7 @@ func (r *AIRepositoryImpl) IncrementAICallCount(ctx context.Context, userID int6
 	return nil
 }
 
-// ResetAICallCount 重置用户AI调用次数
+// ResetAICallCount 重置用户 AI 调用次数
 func (r *AIRepositoryImpl) ResetAICallCount(ctx context.Context, userID string) error {
 	date := time.Now().Format("20060102")
 	key := "ai-" + date + "-" + userID + "-num"
@@ -109,7 +109,7 @@ func (r *AIRepositoryImpl) ResetAICallCount(ctx context.Context, userID string) 
 	return r.redis.Del(ctx, key).Err()
 }
 
-// GetCustomAIModelFromRedis 从Redis获取自定义AI模型配置
+// GetCustomAIModelFromRedis 从 Redis 获取自定义 AI 模型配置
 func (r *AIRepositoryImpl) GetCustomAIModelFromRedis(ctx context.Context, modelID int64, userID int64) (map[string]string, error) {
 	key := fmt.Sprintf("ai-model:%d:%d", userID, modelID)
 	data, err := r.redis.Get(ctx, key).Bytes()
@@ -129,7 +129,7 @@ func (r *AIRepositoryImpl) GetCustomAIModelFromRedis(ctx context.Context, modelI
 	return modelConfig, nil
 }
 
-// SaveCustomAIModelToRedis 保存自定义AI模型配置到Redis
+// SaveCustomAIModelToRedis 保存自定义 AI 模型配置到 Redis
 func (r *AIRepositoryImpl) SaveCustomAIModelToRedis(ctx context.Context, modelID int64, userID int64, modelConfig map[string]string) error {
 	key := fmt.Sprintf("ai-model:%d:%d", userID, modelID)
 	data, err := json.Marshal(modelConfig)
@@ -140,7 +140,7 @@ func (r *AIRepositoryImpl) SaveCustomAIModelToRedis(ctx context.Context, modelID
 	return r.redis.Set(ctx, key, data, 24*time.Hour).Err()
 }
 
-// DeleteCustomAIModelFromRedis 从Redis删除自定义AI模型配置
+// DeleteCustomAIModelFromRedis 从 Redis 删除自定义 AI 模型配置
 func (r *AIRepositoryImpl) DeleteCustomAIModelFromRedis(ctx context.Context, modelID int64, userID int64) error {
 	key := fmt.Sprintf("ai-model:%d:%d", userID, modelID)
 	return r.redis.Del(ctx, key).Err()

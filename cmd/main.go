@@ -21,7 +21,7 @@ import (
 )
 
 func init() {
-	metrics.PrometheusRegister() // 初始化Prometheus
+	metrics.PrometheusRegister() // 初始化 Prometheus
 	core.RegisterValidators()    // 注册自定义验证器
 }
 
@@ -46,7 +46,7 @@ func main() {
 	// 4. 初始化日志
 	zlog.InitLogger(config.Log)
 
-	// 5. 初始化Redis
+	// 5. 初始化 Redis
 	redisClient, err := repository.InitRedis()
 	if err != nil {
 		zlog.Fatalf("Failed to initialize Redis: %v", err)
@@ -61,10 +61,10 @@ func main() {
 	// 7. 初始化用户仓库
 	userAIRepo := repository.NewUserAIRepository(db, redisClient)
 
-	// 8. 初始化AI仓库
+	// 8. 初始化 AI 仓库
 	aiRepo := repository.NewAIRepository(redisClient)
 
-	// 9. 初始化QACache（异步加载，失败不影响服务启动）
+	// 9. 初始化 QACache（异步加载，失败不影响服务启动）
 	qaCache := model.NewQACache()
 	qaCacheLoader := repository.NewQACacheLoader()
 	go func() {
@@ -79,7 +79,7 @@ func main() {
 	// 10. 初始化 OpenAI 客户端管理器（TTL 缓存，默认过期时间 30 分钟）
 	clientManager := service.NewOpenAIClientManager(0)
 
-	// 11. 预先初始化默认AI客户端（启动时验证配置是否正确）
+	// 11. 预先初始化默认 AI 客户端（启动时验证配置是否正确）
 	apiKey := os.Getenv("DASHSCOPE_API_KEY")
 	if apiKey == "" {
 		zlog.Fatalf("DASHSCOPE_API_KEY is required")
@@ -95,7 +95,7 @@ func main() {
 	}
 	zlog.Infow("Default OpenAI client initialized", "baseURL", baseURL)
 
-	// 12. 创建AI服务
+	// 12. 创建 AI 服务
 	aiService := service.NewAIService(clientManager, aiRepo, userAIRepo, qaCache, config.AI)
 
 	// 13. 启动 pprof http 服务（通过 PPROF_PORT 环境变量控制，默认为 6060）

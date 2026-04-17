@@ -9,7 +9,7 @@ import (
 	"github.com/chenzanhong/formallanglab-ai/internal/repository"
 )
 
-// QACacheService 提供QA缓存服务接口
+// QACacheService 提供 QA 缓存服务接口
 type QACacheService struct {
 	cache        *model.QACache
 	fileLoader   *repository.QACacheLoader

@@ -23,7 +23,7 @@ type CustomAIModelRequest struct {
 	ModelName  string `json:"model_name" binding:"required"`
 }
 
-// CustomAIModelResponse 自定义AI模型响应
+// CustomAIModelResponse 自定义 AI 模型响应
 type CustomAIModelResponse struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
@@ -34,12 +34,12 @@ type CustomAIModelResponse struct {
 	CreatedAt  string `json:"created_at"`
 }
 
-// CustomAIModelListResponse 自定义AI模型列表响应
+// CustomAIModelListResponse 自定义 AI 模型列表响应
 type CustomAIModelListResponse struct {
 	Models []CustomAIModelResponse `json:"models"`
 }
 
-// CustomAIModelOperationResponse 自定义AI模型操作响应
+// CustomAIModelOperationResponse 自定义 AI 模型操作响应
 type CustomAIModelOperationResponse struct {
 	Result bool   `json:"result"`
 	Msg    string `json:"msg"`
@@ -50,7 +50,7 @@ type SwitchModelRequest struct {
 	ModelID int64 `json:"model_id"` // 0 表示切换到默认模型
 }
 
-// AIConfigResponse AI配置响应
+// AIConfigResponse AI 配置响应
 type AIConfigResponse struct {
 	CurrentModelID int64                   `json:"current_model_id"` // 0 表示使用默认模型
 	RemainingQuota int                     `json:"remaining_quota"`  // 默认模型剩余次数

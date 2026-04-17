@@ -472,7 +472,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 								safeWrite(model.WsMessage{Type: model.MsgTypeStopped})
 								return
 							default:
-								// 继续发送chuck
+								// 继续发送 chuck
 							}
 							content := mockStream.Current()
 							if err := safeWrite(model.WsMessage{Type: model.MsgTypeChunk, Data: content}); err != nil {
@@ -564,7 +564,7 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 			mu.Lock()
 			if currentStream != nil {
 				currentStream.cancel()
-				// 不等待done，立即响应
+				// 不等待 done，立即响应
 			}
 			mu.Unlock()
 			safeWrite(model.WsMessage{Type: model.MsgTypeStopped})
@@ -576,16 +576,16 @@ func (h *AIHandler) AIChatWS(c *gin.Context) {
 	}
 }
 
-// GetAIConfig 获取用户的AI配置
+// GetAIConfig 获取用户的 AI 配置
 func (h *AIHandler) GetAIConfig(c *gin.Context) {
-	// 获取用户ID
+	// 获取用户 ID
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
 		return
 	}
 
-	// 获取AI配置
+	// 获取 AI 配置
 	config, err := h.aiService.GetAIConfig(c.Request.Context(), userID.(int64))
 	if err != nil {
 		zlog.Warnw("获取AI配置失败", "error", err)
@@ -597,9 +597,9 @@ func (h *AIHandler) GetAIConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, config)
 }
 
-// AddCustomAIModel 添加自定义AI模型配置
+// AddCustomAIModel 添加自定义 AI 模型配置
 func (h *AIHandler) AddCustomAIModel(c *gin.Context) {
-	// 获取用户ID
+	// 获取用户 ID
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
@@ -640,9 +640,9 @@ func (h *AIHandler) AddCustomAIModel(c *gin.Context) {
 	})
 }
 
-// GetCustomAIModels 获取用户的自定义AI模型配置列表
+// GetCustomAIModels 获取用户的自定义 AI 模型配置列表
 func (h *AIHandler) GetCustomAIModels(c *gin.Context) {
-	// 获取用户ID
+	// 获取用户 ID
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
@@ -677,16 +677,16 @@ func (h *AIHandler) GetCustomAIModels(c *gin.Context) {
 	})
 }
 
-// UpdateCustomAIModel 更新自定义AI模型配置
+// UpdateCustomAIModel 更新自定义 AI 模型配置
 func (h *AIHandler) UpdateCustomAIModel(c *gin.Context) {
-	// 获取用户ID
+	// 获取用户 ID
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
 		return
 	}
 
-	// 获取模型ID
+	// 获取模型 ID
 	modelIDStr := c.Param("id")
 	var modelID int64
 	if _, err := fmt.Sscanf(modelIDStr, "%d", &modelID); err != nil {
@@ -728,16 +728,16 @@ func (h *AIHandler) UpdateCustomAIModel(c *gin.Context) {
 	})
 }
 
-// DeleteCustomAIModel 删除自定义AI模型配置
+// DeleteCustomAIModel 删除自定义 AI 模型配置
 func (h *AIHandler) DeleteCustomAIModel(c *gin.Context) {
-	// 获取用户ID
+	// 获取用户 ID
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
 		return
 	}
 
-	// 获取模型ID
+	// 获取模型 ID
 	modelIDStr := c.Param("id")
 	var modelID int64
 	if _, err := fmt.Sscanf(modelIDStr, "%d", &modelID); err != nil {
@@ -761,7 +761,7 @@ func (h *AIHandler) DeleteCustomAIModel(c *gin.Context) {
 
 // SwitchModel 切换模型
 func (h *AIHandler) SwitchModel(c *gin.Context) {
-	// 获取用户ID
+	// 获取用户 ID
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})

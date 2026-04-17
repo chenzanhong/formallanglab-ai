@@ -23,7 +23,7 @@ func GetLimiter(username string) *rate.Limiter {
 		return limiter.(*rate.Limiter)
 	}
 
-	// 不存在则创建，已经经过JWT，不会被恶意刷次数
+	// 不存在则创建，已经经过 JWT，不会被恶意刷次数
 	limiter := rate.NewLimiter(rate.Limit(userRate), userBurst)
 
 	actual, loaded := userLimiters.LoadOrStore(username, limiter)

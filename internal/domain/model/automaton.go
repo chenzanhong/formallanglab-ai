@@ -13,7 +13,7 @@ type State string
 type Transition struct {
 	FromState State   `json:"fromState"` // 起始状态
 	Input     Symbol  `json:"input"`     // 输入符号
-	ToStates  []State `json:"toStates"`  // 目标状态（对于NFA可以有多个，但是目前大部分还是分开来的，不合并相同FromState+Input的产生式）
+	ToStates  []State `json:"toStates"`  // 目标状态（对于 NFA 可以有多个，但是目前大部分还是分开来的，不合并相同 FromState+Input 的产生式）
 }
 
 type AutomatonType int
@@ -31,6 +31,6 @@ type Automaton struct {
 	Transitions     []Transition                 `json:"transitions"`     // 状态转移规则集合
 	InitialState    State                        `json:"initialState"`    // 初始状态
 	AcceptingStates []State                      `json:"acceptingStates"` // 接受状态集合
-	Type            AutomatonType                `json:"type"`            // 是否为DFA，否则为NFA
-	TransMap        map[State]map[Symbol][]State `json:"-"`               // Map存储状态转移规则，识别字符串时效率高
+	Type            AutomatonType                `json:"type"`            // 是否为 DFA，否则为 NFA
+	TransMap        map[State]map[Symbol][]State `json:"-"`               // Map 存储状态转移规则，识别字符串时效率高
 }

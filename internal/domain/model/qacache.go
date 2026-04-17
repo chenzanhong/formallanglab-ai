@@ -50,8 +50,8 @@ func (c *QACache) Delete(key string) {
 	delete(c.data, key)
 }
 
-// QACacheItem 数据库模型，用于PostgreSQL存储
-// 注意：这是新增的结构体，不影响现有的QACache实现
+// QACacheItem 数据库模型，用于 PostgreSQL 存储
+// 注意：这是新增的结构体，不影响现有的 QACache 实现
 type QACacheItem struct {
 	ID        int       `json:"id" db:"id"`
 	Content   string    `json:"content" db:"content"`

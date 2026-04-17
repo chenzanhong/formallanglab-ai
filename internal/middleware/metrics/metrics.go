@@ -33,9 +33,9 @@ var (
 	)
 )
 
-// ============ HTTP请求指标 ============
+// ============ HTTP 请求指标 ============
 var (
-	// httpRequestsTotal 记录HTTP请求的总次数，按方法、路径和状态码分类
+	// httpRequestsTotal 记录 HTTP 请求的总次数，按方法、路径和状态码分类
 	// 例如: http_requests_total{method="GET", path="/api/grammar/validate", status="200"}
 	httpRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -45,7 +45,7 @@ var (
 		[]string{"method", "path", "status"},
 	)
 
-	// httpRequestDuration 记录HTTP请求的响应时间分布，按方法和路径分类
+	// httpRequestDuration 记录 HTTP 请求的响应时间分布，按方法和路径分类
 	// 例如: http_request_duration_seconds{method="POST", path="/api/automaton/minimize"}
 	httpRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -57,7 +57,7 @@ var (
 	)
 )
 
-// PrometheusRegister 将所有定义的指标注册到Prometheus默认注册表中
+// PrometheusRegister 将所有定义的指标注册到 Prometheus 默认注册表中
 func PrometheusRegister() {
 	prometheus.MustRegister(httpRequestsTotal, httpRequestDuration, operationTotal, operationDuration)
 }
@@ -80,7 +80,7 @@ func ObserveOperationDuration(module, operation string, seconds float64) {
 	operationDuration.WithLabelValues(module, operation).Observe(seconds)
 }
 
-// HTTPMiddleware HTTP中间件，用于收集HTTP请求指标
+// HTTPMiddleware HTTP 中间件，用于收集 HTTP 请求指标
 // 收集指标包括:
 //   - 请求总数 (按方法、路径、状态码)
 //   - 请求响应时间分布 (按方法、路径)
@@ -99,7 +99,7 @@ func HTTPMiddleware() gin.HandlerFunc {
 		// 获取响应状态码
 		status := strconv.Itoa(c.Writer.Status())
 
-		// 更新HTTP请求指标
+		// 更新 HTTP 请求指标
 		httpRequestsTotal.WithLabelValues(method, path, status).Inc()
 		httpRequestDuration.WithLabelValues(method, path).Observe(time.Since(start).Seconds())
 	}

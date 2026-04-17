@@ -12,7 +12,7 @@ import (
 	"github.com/chenzanhong/formallanglab-ai/internal/domain/model"
 )
 
-// QACacheWatcher 文件系统监控器，用于自动更新QA缓存
+// QACacheWatcher 文件系统监控器，用于自动更新 QA 缓存
 type QACacheWatcher struct {
 	watcher       *fsnotify.Watcher
 	watchedDir    string
@@ -78,7 +78,7 @@ func (w *QACacheWatcher) watch() {
 				return
 			}
 
-			// 只处理Markdown文件
+			// 只处理 Markdown 文件
 			if filepath.Ext(event.Name) != ".md" {
 				continue
 			}
@@ -135,7 +135,7 @@ func (w *QACacheWatcher) reloadSingleFile(filePath string) {
 	// 解析文件并更新缓存
 	w.qaCacheLoader.LoadCacheFile(&w.qaCache, filePath)
 
-	// 保存布隆过滤器状态到Redis
+	// 保存布隆过滤器状态到 Redis
 	// if redisCache, ok := w.qaCache.(*model.RedisQACache); ok {
 	// 	if err := redisCache.SaveBloomFilterToRedis(); err != nil {
 	// 		zlog.Warnw("Failed to save bloom filter to Redis", "error", err)

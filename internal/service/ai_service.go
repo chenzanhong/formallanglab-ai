@@ -264,12 +264,12 @@ func (s *AIServiceImpl) CheckAICallLimit(ctx context.Context, userID int64) (boo
 	return count < maxAICallPerDay, nil
 }
 
-// IncrementAICallCount 增加用户AI调用计数
+// IncrementAICallCount 增加用户 AI 调用计数
 func (s *AIServiceImpl) IncrementAICallCount(ctx context.Context, userID int64) error {
 	return s.repo.IncrementAICallCount(ctx, userID)
 }
 
-// GetCustomAIModel 获取自定义AI模型配置
+// GetCustomAIModel 获取自定义 AI 模型配置
 func (s *AIServiceImpl) GetCustomAIModel(ctx context.Context, modelID int64, userID int64) (map[string]string, error) {
 	modelConfig, err := s.repo.GetCustomAIModelFromRedis(ctx, modelID, userID)
 	if err != nil {
@@ -368,7 +368,7 @@ func (s *AIServiceImpl) AddCustomAIModel(ctx context.Context, userID int64, req 
 	return aiModel, nil
 }
 
-// GetCustomAIModels 获取用户的自定义AI模型配置列表
+// GetCustomAIModels 获取用户的自定义 AI 模型配置列表
 func (s *AIServiceImpl) GetCustomAIModels(ctx context.Context, userID int64) ([]*model.CustomAIModel, error) {
 	models, err := s.userAIRepo.GetCustomAIModels(ctx, userID)
 	if err != nil {
@@ -462,7 +462,7 @@ func (s *AIServiceImpl) UpdateCustomAIModel(ctx context.Context, userID int64, m
 	return existingModel, nil
 }
 
-// DeleteCustomAIModel 删除自定义AI模型配置
+// DeleteCustomAIModel 删除自定义 AI 模型配置
 func (s *AIServiceImpl) DeleteCustomAIModel(ctx context.Context, userID int64, modelID int64) error {
 	if err := s.userAIRepo.DeleteCustomAIModel(ctx, modelID, userID); err != nil {
 		return err
@@ -471,19 +471,19 @@ func (s *AIServiceImpl) DeleteCustomAIModel(ctx context.Context, userID int64, m
 	return s.repo.DeleteCustomAIModelFromRedis(ctx, modelID, userID)
 }
 
-// GetUserCurrentModelID 获取用户当前使用的模型ID
+// GetUserCurrentModelID 获取用户当前使用的模型 ID
 func (s *AIServiceImpl) GetUserCurrentModelID(ctx context.Context, userID int64) (int64, error) {
 	return s.userAIRepo.GetUserCurrentModelID(ctx, userID)
 }
 
-// UpdateUserCurrentModel 更新用户当前使用的模型ID
+// UpdateUserCurrentModel 更新用户当前使用的模型 ID
 func (s *AIServiceImpl) UpdateUserCurrentModel(ctx context.Context, userID int64, modelID int64) error {
 	return s.userAIRepo.UpdateUserCurrentModel(ctx, userID, modelID)
 }
 
-// GetAIConfig 获取用户的AI配置
+// GetAIConfig 获取用户的 AI 配置
 func (s *AIServiceImpl) GetAIConfig(ctx context.Context, userID int64) (*dto.AIConfigResponse, error) {
-	// 获取当前模型ID
+	// 获取当前模型 ID
 	currentModelID, err := s.userAIRepo.GetUserCurrentModelID(ctx, userID)
 	if err != nil {
 		return nil, err

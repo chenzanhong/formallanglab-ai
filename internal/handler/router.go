@@ -14,9 +14,9 @@ import (
 // SetupRouter 设置路由
 func SetupRouter(aiHandler *AIHandler) *gin.Engine {
 	router := gin.Default()
-	// 1. 请求ID中间件
+	// 1. 请求 ID 中间件
 	router.Use(requestid.RequestID())
-	// 2. CORS中间件
+	// 2. CORS 中间件
 	router.Use(cors.CORSMiddleware())
 	// 3. 指标收集
 	router.Use(metrics.HTTPMiddleware())
@@ -33,23 +33,23 @@ func SetupRouter(aiHandler *AIHandler) *gin.Engine {
 		})
 	})
 	router.GET("/gdesign/ai/metrics", metrics.MetricsHandler())
-	// WebSocket聊天接口，不经过JWT中间件，直接通过URL参数 token 验证
+	// WebSocket 聊天接口，不经过 JWT 中间件，直接通过 URL 参数 token 验证
 	router.GET("/gdesign/ai/ws", jwt.AuthWebsocket(), aiHandler.AIChatWS)
 
-	router.POST("/gdesign/ai/sse", jwtx.GinJWTAuthMiddleware(), rate.UserRateLimitMiddleware(), aiHandler.AIChatSSE) // 流式AI聊天接口，SSE
+	router.POST("/gdesign/ai/sse", jwtx.GinJWTAuthMiddleware(), rate.UserRateLimitMiddleware(), aiHandler.AIChatSSE) // 流式 AI 聊天接口，SSE
 
-	// 自定义AI模型相关接口
+	// 自定义 AI 模型相关接口
 	authGroup := router.Group("/gdesign/ai", jwtx.GinJWTAuthMiddleware())
 	{
-		// 获取AI配置
+		// 获取 AI 配置
 		authGroup.GET("/config", aiHandler.GetAIConfig)
-		// 添加自定义AI模型
+		// 添加自定义 AI 模型
 		authGroup.POST("/models", aiHandler.AddCustomAIModel)
-		// 获取自定义AI模型列表
+		// 获取自定义 AI 模型列表
 		authGroup.GET("/models", aiHandler.GetCustomAIModels)
-		// 更新自定义AI模型
+		// 更新自定义 AI 模型
 		authGroup.PUT("/models/:id", aiHandler.UpdateCustomAIModel)
-		// 删除自定义AI模型
+		// 删除自定义 AI 模型
 		authGroup.DELETE("/models/:id", aiHandler.DeleteCustomAIModel)
 		// 切换模型
 		authGroup.POST("/switch", aiHandler.SwitchModel)
