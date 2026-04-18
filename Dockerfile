@@ -9,7 +9,6 @@ WORKDIR /app
 #     go version && \
 #     echo "构建环境准备完成"
 
-
 # 复制go.mod和go.sum文件
 COPY go.mod go.sum ./
 
