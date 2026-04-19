@@ -11,6 +11,17 @@ type AIChatRequest struct {
 	Automaton *model.Automaton `json:"automaton,omitempty"`
 	Grammar   *model.Grammar   `json:"grammar,omitempty"`
 	Regex     *model.Regex     `json:"regex,omitempty"`
+
+	// 图片附件（多模态支持）
+	Attachments []ImageAttachment `json:"attachments,omitempty"`
+}
+
+// ImageAttachment 图片附件
+type ImageAttachment struct {
+	Type     string `json:"type"`           // "image"
+	MimeType string `json:"mimeType"`       // "image/jpeg", "image/png"
+	Data     string `json:"data"`           // Base64 编码的图片数据
+	Name     string `json:"name,omitempty"` // 文件名（可选）
 }
 
 // ========== Custom AI Model DTOs ===========
