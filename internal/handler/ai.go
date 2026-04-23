@@ -581,20 +581,39 @@ func (h *AIHandler) GetAIConfig(c *gin.Context) {
 	// 获取用户 ID
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户ID"})
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少用户 ID"})
 		return
 	}
 
 	// 获取 AI 配置
 	config, err := h.aiService.GetAIConfig(c.Request.Context(), userID.(int64))
 	if err != nil {
-		zlog.Warnw("获取AI配置失败", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取AI配置失败", "result": false})
+		zlog.Warnw("获取 AI 配置失败", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取 AI 配置失败", "result": false})
 
 		return
 	}
 
 	c.JSON(http.StatusOK, config)
+}
+
+// ClearAIChat 清空 AI 聊天记录
+func (h *AIHandler) ClearAIChat(c *gin.Context) {
+	username := c.GetString("username")
+	if username == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"msg": "缺少有效的 token", "result": false})
+		return
+	}
+
+	if err := h.aiService.ClearSession(c.Request.Context(), username); err != nil {
+		metrics.IncOperation("ai", "clear_chat", "failure: clear session error")
+		zlog.Warnw("清空 AI 聊天记录失败", "detail", "无法删除 Redis 中的会话数据")
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": "清空聊天记录失败", "result": false})
+		return
+	}
+
+	metrics.IncOperation("ai", "clear_chat", "success")
+	c.JSON(http.StatusOK, gin.H{"msg": "聊天记录已清空", "result": true})
 }
 
 // AddCustomAIModel 添加自定义 AI 模型配置

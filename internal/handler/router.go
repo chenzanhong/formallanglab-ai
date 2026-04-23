@@ -38,9 +38,10 @@ func SetupRouter(aiHandler *AIHandler) *gin.Engine {
 
 	router.POST("/gdesign/ai/sse", jwtx.GinJWTAuthMiddleware(), rate.UserRateLimitMiddleware(), aiHandler.AIChatSSE) // 流式 AI 聊天接口，SSE
 
-	// 自定义 AI 模型相关接口
 	authGroup := router.Group("/gdesign/ai", jwtx.GinJWTAuthMiddleware())
 	{
+		// 清空聊天记录
+		authGroup.POST("/clear", aiHandler.ClearAIChat)
 		// 获取 AI 配置
 		authGroup.GET("/config", aiHandler.GetAIConfig)
 		// 添加自定义 AI 模型

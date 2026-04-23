@@ -43,6 +43,7 @@ type AIService interface {
 	CheckCache(question string) string                                         // 查看是否命中预置高频问题缓存
 	GetSession(ctx context.Context, username string) (*model.AISession, error) //
 	SaveSession(ctx context.Context, username string, session *model.AISession) error
+	ClearSession(ctx context.Context, username string) error
 	GetSessionExpireSeconds() int
 	GetMaxSessionTurns() int
 	CheckAICallLimit(ctx context.Context, userID int64) (bool, error) // 检查是否超出调用限制
@@ -233,6 +234,11 @@ func (s *AIServiceImpl) CheckCache(question string) string {
 // SaveSession 保存会话
 func (s *AIServiceImpl) SaveSession(ctx context.Context, username string, session *model.AISession) error {
 	return s.repo.SaveSession(ctx, username, session, s.aiCfg.SessionExpireSeconds)
+}
+
+// ClearSession 清除会话
+func (s *AIServiceImpl) ClearSession(ctx context.Context, username string) error {
+	return s.repo.DeleteSession(ctx, username)
 }
 
 func (s *AIServiceImpl) GetSession(ctx context.Context, username string) (*model.AISession, error) {

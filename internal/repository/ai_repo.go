@@ -15,6 +15,7 @@ import (
 type AIRepository interface {
 	SaveSession(ctx context.Context, username string, session *model.AISession, sessionExpireSeconds int) error
 	GetSession(ctx context.Context, username string) (*model.AISession, error)
+	DeleteSession(ctx context.Context, username string) error
 	GetAICallCount(ctx context.Context, userID int64) (int, error)
 	IncrementAICallCount(ctx context.Context, userID int64) error
 	ResetAICallCount(ctx context.Context, userID string) error
@@ -59,6 +60,11 @@ func (r *AIRepositoryImpl) GetSession(ctx context.Context, username string) (*mo
 	}
 
 	return &session, nil
+}
+
+func (r *AIRepositoryImpl) DeleteSession(ctx context.Context, username string) error {
+	key := "ai:" + username
+	return r.redis.Del(ctx, key).Err()
 }
 
 func getAICallCountKey(userID int64) string {
